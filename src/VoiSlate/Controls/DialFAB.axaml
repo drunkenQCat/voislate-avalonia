@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:VoiSlate.Controls"
+             x:Class="VoiSlate.Controls.DialFAB"
+             x:DataType="controls:DialFAB">
+
+  <!--
+    Agent C 占位 DialFAB（契约 v0.5 §5：Options/SelectedOption(TwoWay) + SelectionChanged/Opened/Closed；
+    DialOption=Label/Icon/EnumValue(object)）。展开点外部关闭、状态回显（NotChecked 浅/Ok 绿/Bad 红/Nice 金黄）占位实现。
+    D 合入后删除本文件与 DialFAB.axaml.cs。
+  -->
+  <Button x:Name="MainButton" MinWidth="72" MinHeight="72" CornerRadius="36" Padding="12,8"
+          HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+          Background="#E8F0FA" BorderThickness="1" BorderBrush="#B8CDE4"
+          ToolTip.Tip="评价拨盘（点按展开）">
+    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+      <TextBlock x:Name="IconText" FontSize="20" Text="✓" VerticalAlignment="Center" />
+      <TextBlock x:Name="LabelText" FontSize="12" VerticalAlignment="Center" />
+    </StackPanel>
+  </Button>
+
+</UserControl>

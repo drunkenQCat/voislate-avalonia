@@ -1,0 +1,22 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="VoiSlate.Views.SmallEditDialog"
+        Title="编辑"
+        Width="440"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        CanResize="False">
+
+  <!-- Agent C：通用单值编辑对话框（文件号/链接符/前缀模式等）。 -->
+  <StackPanel Margin="20" Spacing="12">
+    <TextBlock x:Name="LabelText" FontSize="14" TextWrapping="Wrap" />
+    <TextBox x:Name="ValueBox" />
+    <ComboBox x:Name="ModeCombo" IsVisible="False" HorizontalAlignment="Stretch" />
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button x:Name="CancelButton" Content="取消" />
+      <Button x:Name="OkButton" Content="确定" Classes="accent" />
+    </StackPanel>
+  </StackPanel>
+
+</Window>

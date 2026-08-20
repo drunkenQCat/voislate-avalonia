@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VoiSlate.ViewModels"
+        x:Class="VoiSlate.Views.QuickViewLogWindow"
+        Title="场记速览"
+        Width="540"
+        Height="620"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <!-- Agent C：场记速览对话框（quick_view_log_dialog 语义：fileName → tkNote；sublist(40) 已知行为）。 -->
+  <DockPanel Margin="16">
+    <TextBlock DockPanel.Dock="Top" FontWeight="Bold" Margin="0,0,0,12"
+               Text="场记速览（fileName → 录音标注；已知行为：超过 40 条时取 sublist(40) 段）"
+               TextWrapping="Wrap" />
+    <ListBox x:Name="NotesList">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:QuickNoteItem">
+          <Grid ColumnDefinitions="190,*" Margin="0,2">
+            <TextBlock Text="{Binding FileName}" FontWeight="Bold" Foreground="#0067A0" />
+            <TextBlock Grid.Column="1" Text="{Binding TkNote}" TextWrapping="Wrap" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+
+</Window>

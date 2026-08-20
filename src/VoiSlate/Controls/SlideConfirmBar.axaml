@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:VoiSlate.Controls"
+             x:Class="VoiSlate.Controls.SlideConfirmBar"
+             x:DataType="controls:SlideConfirmBar">
+
+  <!--
+    Agent C 占位 SlideConfirmBar（契约 v0.5 §5：State/IsRecording/RecordDuration/Transcription +
+    TextLeft/TextRight(TwoWay) + SlideRight/SlideLeft；滑动判定/回弹/红绿插值由 Agent D 的正式实现提供）。
+    D 合入后删除本文件与 SlideConfirmBar.axaml.cs。
+  -->
+  <Border BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="8" Padding="12">
+    <StackPanel Spacing="8">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock x:Name="RecIndicator" FontWeight="Bold" Foreground="#C62828" IsVisible="False" />
+        <TextBlock Grid.Column="1" x:Name="TranscriptionText" Foreground="#555555" TextWrapping="Wrap"
+                   MaxWidth="360" HorizontalAlignment="Right" />
+      </Grid>
+      <Grid ColumnDefinitions="*,Auto,*,Auto">
+        <StackPanel Grid.Column="0" Spacing="4">
+          <TextBlock Text="录音标注（左滑生效 · Tk Note）" FontSize="12" Foreground="#888888" />
+          <TextBox x:Name="LeftBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="52"
+                   Text="{Binding TextLeft, RelativeSource={RelativeSource AncestorType=controls:SlideConfirmBar}, Mode=TwoWay}" />
+        </StackPanel>
+        <Button Grid.Column="1" x:Name="LeftSlideButton" Content="左滑 ⏩" VerticalAlignment="Center"
+                Margin="8,0" ToolTip.Tip="占位按钮：触发 SlideLeft（左滑写录音标注）" Click="OnSlideLeftClick" />
+        <StackPanel Grid.Column="2" Spacing="4">
+          <TextBlock Text="镜头标注（右滑生效 · Shot Note）" FontSize="12" Foreground="#888888" />
+          <TextBox x:Name="RightBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="52"
+                   Text="{Binding TextRight, RelativeSource={RelativeSource AncestorType=controls:SlideConfirmBar}, Mode=TwoWay}" />
+        </StackPanel>
+        <Button Grid.Column="3" x:Name="RightSlideButton" Content="⏪ 右滑" VerticalAlignment="Center"
+                Margin="8,0" ToolTip.Tip="占位按钮：触发 SlideRight（右滑写镜头标注）" Click="OnSlideRightClick" />
+      </Grid>
+    </StackPanel>
+  </Border>
+
+</UserControl>
