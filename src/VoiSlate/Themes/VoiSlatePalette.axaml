@@ -1,0 +1,58 @@
+<!-- VoiSlatePalette — 主题色板资源键（契约 §6；D 产出，所有权归 D，C 合并进 App.axaml）。 -->
+
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ============ 契约 §6 必选键（键名逐字一致，不得改名） ============ -->
+
+  <!-- 全局背景（原版 Material Scaffold 亮色白底）。 -->
+  <SolidColorBrush x:Key="VoiSlate.Bg" Color="#FFFFFFFF" />
+
+  <!-- 主色 bahamaBlue（原版 flex_color_scheme 亮色 M3 主色 #0067A0）。 -->
+  <SolidColorBrush x:Key="VoiSlate.Primary" Color="#FF0067A0" />
+
+  <!-- 语义绿（原版 Colors.green / 评价"声音可"）。 -->
+  <SolidColorBrush x:Key="VoiSlate.OkGreen" Color="#FF4CAF50" />
+
+  <!-- 语义红（原版 Colors.red / 评价"声音弃"）。 -->
+  <SolidColorBrush x:Key="VoiSlate.BadRed" Color="#FFF44336" />
+
+  <!-- 语义金黄（契约：Nice=金黄，"画面过"）。 -->
+  <SolidColorBrush x:Key="VoiSlate.NiceGold" Color="#FFFFC107" />
+
+  <!-- 提示文本色（原版 black26 类 hint）。 -->
+  <SolidColorBrush x:Key="VoiSlate.TextHint" Color="#FF9E9E9E" />
+
+  <!-- ============ 控件/页面补充键（取色自 Flutter 原版源码） ============ -->
+
+  <!-- 主色别名（任务书提及的 AccentColor）。 -->
+  <SolidColorBrush x:Key="VoiSlate.AccentColor" Color="#FF0067A0" />
+
+  <!-- 中性色（未选中/未知状态/置灰）。 -->
+  <SolidColorBrush x:Key="VoiSlate.NeutralColor" Color="#FF9E9E9E" />
+
+  <!-- 记录页背景。 -->
+  <SolidColorBrush x:Key="VoiSlate.RecordPageBackground" Color="#FFFFFFFF" />
+
+  <!-- 卡片底色（原版 record_page.dart 0xFFF2F5DE：当前拍提示卡 / 评价拨盘未选中）。 -->
+  <SolidColorBrush x:Key="VoiSlate.CardBackground" Color="#FFF2F5DE" />
+
+  <!-- 滚轮条目底色（原版 slate_picker.dart itemBackgroundColor 0xFFD1C4E9）。 -->
+  <SolidColorBrush x:Key="VoiSlate.WheelItemBackground" Color="#FFD1C4E9" />
+
+  <!-- 滚轮普通文本（非选中项）。 -->
+  <SolidColorBrush x:Key="VoiSlate.WheelText" Color="#FF5A5A5A" />
+
+  <!-- 滚轮选中文本（原版 0xFF212121）。 -->
+  <SolidColorBrush x:Key="VoiSlate.WheelTextSelected" Color="#FF212121" />
+
+  <!-- 强文本（原版 0xFF212121）。 -->
+  <SolidColorBrush x:Key="VoiSlate.TextStrong" Color="#FF212121" />
+
+  <!-- 记条按钮紫（原版 record_page.dart 0xFF63326E）。 -->
+  <SolidColorBrush x:Key="VoiSlate.SlatePurple" Color="#FF63326E" />
+
+  <!-- 评价拨盘未选中浅色（原版 0xFFF2F5DE；DialStatusPalette.NotChecked 同值）。 -->
+  <SolidColorBrush x:Key="VoiSlate.DialNotChecked" Color="#FFF2F5DE" />
+
+</ResourceDictionary>

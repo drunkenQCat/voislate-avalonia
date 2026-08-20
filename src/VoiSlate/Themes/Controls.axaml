@@ -1,0 +1,166 @@
+<!-- Controls.axaml — VoiSlate 自定义控件的默认样式/模板（契约 §5；D 产出，所有权归 D）。
+     与 VoiSlatePalette.axaml 配套：C 把本文件合并进 App.axaml 的 Application.Styles，
+     把配色字典合并进 Application.Resources（合并说明见 Agent D 报告）。 -->
+
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:VoiSlate.Controls;assembly=VoiSlate">
+
+  <!-- ============ SlideConfirmBar（滑动确认条） ============ -->
+
+  <Style Selector="controls|SlideConfirmBar">
+    <Setter Property="Height" Value="64" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="controls|SlideConfirmBar">
+          <Grid>
+            <!-- 背景：代码按位置红→绿插值（PART_Background.Background 由控件更新）。 -->
+            <Border x:Name="PART_Background" Background="#FFEF9A9A" CornerRadius="22" ClipToBounds="True">
+              <Grid>
+                <StackPanel x:Name="PART_Arrows" Orientation="Horizontal"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
+                  <TextBlock Text="▶" FontSize="26" Foreground="#FF66BB6A" />
+                  <TextBlock Text="◀" FontSize="26" Foreground="#FFEF5350" />
+                </StackPanel>
+                <StackPanel x:Name="PART_Recording" Orientation="Vertical"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="1"
+                            IsVisible="False">
+                  <TextBlock x:Name="PART_Duration" Text="{TemplateBinding RecordDuration}"
+                             FontSize="14" Foreground="White" HorizontalAlignment="Center" />
+                  <TextBlock x:Name="PART_Transcription" Text="{TemplateBinding Transcription}"
+                             FontSize="12" Foreground="#FFE0E0E0" HorizontalAlignment="Center"
+                             MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </Grid>
+            </Border>
+            <!-- 滑块：水平位置由控件按拖动偏移更新（Margin.Left）。 -->
+            <Border x:Name="PART_Ball" Width="44" Height="44" HorizontalAlignment="Left"
+                    VerticalAlignment="Center" Background="#FFC9E4FF" CornerRadius="22"
+                    BorderBrush="#FF9E9E9E" BorderThickness="1">
+              <TextBlock Text="≡" FontSize="22" HorizontalAlignment="Center"
+                         VerticalAlignment="Center" Foreground="#FF616161" />
+            </Border>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ============ DialFAB（评价弹出拨盘） ============ -->
+
+  <Style Selector="controls|DialFAB">
+    <Setter Property="Width" Value="56" />
+    <Setter Property="Height" Value="56" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="controls|DialFAB">
+          <Grid>
+            <!-- 主按钮：圆形，背景/图标由控件按 SelectedOption 状态回显。 -->
+            <Border x:Name="PART_MainButton" Width="56" Height="56" CornerRadius="28"
+                    Background="#FFF2F5DE" BorderBrush="#FFB0B0B0" BorderThickness="1">
+              <ContentControl x:Name="PART_MainIcon" HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+            </Border>
+            <!-- 选项弹出：向上展开（Placement=Top 由代码设置），点击外部自动关闭。 -->
+            <Popup x:Name="PART_Popup" IsLightDismissEnabled="True">
+              <Border Background="White" CornerRadius="12" Padding="6"
+                      BoxShadow="0 4 12 0 #33000000">
+                <StackPanel x:Name="PART_Options" MinWidth="128" />
+              </Border>
+            </Popup>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ============ FileCounter（文件号三卡片） ============ -->
+
+  <Style Selector="controls|FileCounter">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="controls|FileCounter">
+          <Border Background="#FFCFD8DC" CornerRadius="8" Padding="14,8">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+              <StackPanel Orientation="Vertical" Spacing="2">
+                <TextBlock x:Name="PART_PrefixTag" FontSize="11" Foreground="#B0000000"
+                           HorizontalAlignment="Center" />
+                <Border x:Name="PART_PrefixCard" Background="White" CornerRadius="4"
+                        Padding="10,4" BorderBrush="#FFBDBDBD" BorderThickness="1">
+                  <TextBlock x:Name="PART_PrefixText" FontSize="20" Foreground="#FF212121" />
+                </Border>
+              </StackPanel>
+              <StackPanel Orientation="Vertical" Spacing="2">
+                <TextBlock Text="Divider" FontSize="11" Foreground="#B0000000"
+                           HorizontalAlignment="Center" />
+                <Border x:Name="PART_LinkerCard" Background="White" CornerRadius="4"
+                        Padding="10,4" BorderBrush="#FFBDBDBD" BorderThickness="1">
+                  <TextBlock x:Name="PART_LinkerText" FontSize="22" Foreground="#FF212121" />
+                </Border>
+              </StackPanel>
+              <StackPanel Orientation="Vertical" Spacing="2">
+                <TextBlock Text="Num" FontSize="11" Foreground="#B0000000"
+                           HorizontalAlignment="Center" />
+                <Border x:Name="PART_NumberCard" Background="White" CornerRadius="4"
+                        Padding="10,4" BorderBrush="#FFBDBDBD" BorderThickness="1">
+                  <TextBlock x:Name="PART_NumberText" FontSize="20" Foreground="#FF212121" />
+                </Border>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ============ TagChips（标签 chips 流式排列） ============ -->
+
+  <Style Selector="controls|TagChips">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="controls|TagChips">
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <WrapPanel x:Name="PART_Items" Orientation="Horizontal" />
+          </ScrollViewer>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ============ ToastHost（全局底部 Toast） ============ -->
+
+  <Style Selector="controls|ToastHost">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="controls|ToastHost">
+          <Grid>
+            <Border x:Name="PART_Toast" IsVisible="False" Opacity="0"
+                    Background="#E6000000" CornerRadius="18" Padding="14,8"
+                    HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24">
+              <TextBlock x:Name="PART_ToastText" Foreground="White" FontSize="14" />
+            </Border>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ============ LoadingOverlay（加载覆盖层） ============ -->
+
+  <Style Selector="controls|LoadingOverlay">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="controls|LoadingOverlay">
+          <Panel x:Name="PART_Root" Background="#66000000" IsVisible="False">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+              <ProgressBar IsIndeterminate="True" Width="120" Height="6" />
+              <TextBlock Text="加载中…" Foreground="White" FontSize="14"
+                         HorizontalAlignment="Center" />
+            </StackPanel>
+          </Panel>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+</Styles>
