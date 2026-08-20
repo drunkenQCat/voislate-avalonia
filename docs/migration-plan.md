@@ -1,7 +1,7 @@
 # VoiSlate → Avalonia 迁移计划（migration-plan.md）
 
-> 版本：v0.4（已闭环 Review 第 1、2 轮全部意见）｜最后更新：2026-08-20
-> 状态：🔄 五轮 Review 迭代中（已完成 2/5）
+> 版本：v0.5（已闭环 Review 第 1-3 轮全部意见）｜最后更新：2026-08-20
+> 状态：🔄 五轮 Review 迭代中（已完成 3/5）
 
 ---
 
@@ -119,7 +119,7 @@
 - **ADR-002 ASR/录音 Mock**：IAsrService（Start/Stop/Result/Status 事件）Mock 1.2s 返回确定性转写；IRecordingService 模拟电平。
 - **ADR-003 MVVM=CommunityToolkit.Mvvm**：[ObservableProperty]/RelayCommand/WeakReferenceMessenger。
 - **ADR-004 导航**：单主窗口 + 左侧导航四页；SlateWheel/SlideConfirmBar/DialFAB 自绘控件；LogEditor/NoteEditor 对话框。
-- **ADR-005 序列化**：camelCase + 枚举字符串；**导出格式与原件一致（无日期字段、含 fake/wild 哨兵值）**；`JsonSerializer` 注释指明兼容对象。
+- **ADR-005 序列化**：camelCase + **`JsonStringEnumConverter(JsonNamingPolicy.CamelCase)`（显式命名策略，对齐原件短名枚举）**；**导出格式与原件一致（无日期字段、含 fake/wild 哨兵值）**；`JsonSerializer` 注释指明兼容对象。
 - **ADR-006 备份**：IBackupService，PeriodicTimer(3min) + 退出前 + 手动；`Documents/VoiSlate Logs/slate_backup{yymmdd}-{hour}clock.json`。
 - **ADR-007 日志**：Serilog 滚动文件 + Debug 控制台；ITimeProvider 注入。
 - **ADR-008 生命周期**（Review 1 新增）：DI 容器统一管理 IDisposable（LiteDB/PeriodicTimer/事件订阅），应用退出顺序：停定时器 → 备份 → 关库。
@@ -173,7 +173,7 @@ voislate-avalonia/
 ## 6. 开发顺序（含 P0.5 垂直切片）
 
 - **M0 骨架**（主 Agent）：sln + csproj（net10.0 + Avalonia 12.1.1 + CommunityToolkit.Mvvm + LiteDB + CsvHelper + Serilog）+ DI + 主题色板 + CI 骨架 + **Directory.Build.props**（任何 Agent 禁改）
-- **P0.5 垂直切片**（主 Agent）：**一条记录链路贯通**——Models(SlateLogItem) + ITakeFlowService(记条/撤回核心时序 B1-B5) + LiteDB 存储 + 单测 + 冒烟 + Fake 集（TestDoubles）+ **生产种子（dummy 两份场表）**。**Gate 0→Gate 1 必备动作：contracts.md 升级至 v0.2 签名级并全量核对**（并行稳定接口 = contract v0.2 §2-§6）
+- **P0.5 垂直切片**（主 Agent）：**一条记录链路贯通**——Models(SlateLogItem) + ITakeFlowService(记条/撤回核心时序 B1-B5) + LiteDB 存储 + 单测 + 冒烟 + Fake 集（TestDoubles）+ **生产种子（dummy 两份场表）**。**Gate 0→Gate 1 必备动作：contracts.md 升级至 v0.3 签名级并全量核对**（并行稳定接口 = contract v0.3 §2-§6）
 - **P1 并行**（worktree）：A / E / B / C / D 五分支；**main 冻结**（仅允许 docs 契约提交）；每 Agent 只改自己目录、禁改 docs/根配置；D 无编译依赖可首期开工、**可提前合入**（A 合入后即可）
 - **P2 合并**：A→E→B→(D 任意时点)→C；**P0.5 产物所有权移交**：`SlateLogItem.cs`/`ITakeFlowService.cs`/`LiteDbStore.cs` 及单测合入后演进权归 A/E，主 Agent 不再修改
 - **P3 验证**：dotnet build 0 错误无显著 warning → dotnet test 全绿 → 冒烟（含重启恢复与跨天假时钟（ITimeProvider 注入））
@@ -202,7 +202,7 @@ voislate-avalonia/
 
 ## 8. 契约
 
-见 `docs/contracts.md`（**v0.2 签名级**）：Services 接口签名、VM 成员与命令、控件行为协议（SlateWheel/SlideConfirmBar/DialFAB/FileCounter/TagChips/Toast/LoadingOverlay）、导航与主题资源键、测试与编译基线。**并行开发唯一依据；未达签名级不开工。**
+见 `docs/contracts.md`（**v0.3 签名级**）：Services 接口签名、VM 成员与命令、控件行为协议（SlateWheel/SlideConfirmBar/DialFAB/FileCounter/TagChips/Toast/LoadingOverlay）、导航与主题资源键、测试与编译基线。**并行开发唯一依据；未达签名级不开工。**
 
 ## 9. 验收标准
 
@@ -220,10 +220,10 @@ voislate-avalonia/
 
 ## 10. 阶段门禁（Gate）
 
-- **Gate 0**：五轮 review 全部闭环 + contracts v0.2 签名级 → M0
+- **Gate 0**：五轮 review 全部闭环 + contracts v0.3 签名级 → M0
 - **Gate 1**：M0 + **P0.5 垂直切片**（记条链路 build+test+冒烟 + 种子 + TestDoubles）→ 开五 worktree
 - **Gate 2**：各 worktree 模块 build + 单测 → 合并
 - **Gate 3**：合并后全量 build + test + 冒烟（含重启恢复/跨天假时钟）→ 发布
 
 ---
-*（v0.4：闭环 Review 2——40 文件归属表、FileNumberingService 归 A、IShortcutInputService 删除（音量键归 RecordViewModel）、ITakeFlowService 唯一写入口、Scoped VM 生命周期、契约 v0.2 门禁、P0.5 所有权移交、main 冻结、R14/R15、验收第 11 条；配套 contracts.md v0.2。下一步：Review 第 3 轮——MVVM 最佳实践与映射完整性审查）*
+*（v0.5：闭环 Review 3——JSON 枚举 CamelCase 修正（A#16）、ITakeFlowService 编辑唯一入口（B1）、DialFAB 枚举转换归 C（B2）、CurrentPage=VM+DataTemplate 映射（B3）、SlideConfirmBar 幂等补提交（B4）、Activate/Deactivate 激活钩子（B5）；配套 contracts.md v0.3。下一步：Review 第 4 轮——并行开发实操性审查）*
