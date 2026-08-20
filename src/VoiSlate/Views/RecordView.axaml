@@ -1,0 +1,141 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:VoiSlate.ViewModels"
+             xmlns:models="using:VoiSlate.Models"
+             xmlns:controls="using:VoiSlate.Controls"
+             mc:Ignorable="d" d:DesignWidth="1080" d:DesignHeight="720"
+             x:Class="VoiSlate.Views.RecordView"
+             x:DataType="vm:RecordViewModel">
+
+  <!--
+    Agent C：记录页（契约 §6 RecordView 组合，对齐 record_page.dart 结构意图）。
+    三列 SlateWheel（契约 §5 控件；D 合入前为 Controls/ 占位）+ FileCounter + SlideConfirmBar +
+    DialFAB×2 + 场镜次数字卡 + 当前文件号卡 + 上一拍备注编辑 + 场记速览对话框（sublist(40)）。
+  -->
+  <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{x:Null}">
+    <Grid RowDefinitions="Auto,Auto,200,Auto,Auto,Auto" Margin="20" ColumnDefinitions="*">
+
+      <!-- 状态卡：场镜次数 + 当前文件号（current_take_monitor / current_file_monitor 语义） -->
+      <Grid Grid.Row="0" ColumnDefinitions="*,12,*" Margin="0,0,0,12">
+        <Border Grid.Column="0" Background="#F2F5DE" CornerRadius="10" Padding="14">
+          <StackPanel Spacing="4">
+            <TextBlock Text="当前场 / 镜 / 次" FontSize="13" Foreground="#666666" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock FontSize="24" FontWeight="Bold">
+                <Run Text="{Binding SceneCol.SelectedItem}" /><Run Text=" 场" />
+              </TextBlock>
+              <TextBlock FontSize="24" FontWeight="Bold" Foreground="#0067A0">
+                <Run Text="{Binding ShotCol.SelectedItem}" /><Run Text=" 镜" />
+              </TextBlock>
+              <TextBlock FontSize="24" FontWeight="Bold" Foreground="#B8860B">
+                <Run Text="{Binding TakeCol.SelectedItem}" /><Run Text=" 次" />
+              </TextBlock>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="2" Background="#EEF3F8" CornerRadius="10" Padding="14">
+          <StackPanel Spacing="4">
+            <TextBlock Text="当前文件号（B7：与记录计数同步，编辑走 ITakeFlowService）" FontSize="13" Foreground="#666666" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="{Binding CurrentFilePrefix}" FontSize="24" FontWeight="Bold" />
+              <TextBlock Text="{Binding CurrentFileLinker}" FontSize="24" Foreground="#888888" />
+              <TextBlock Text="{Binding CurrentFileNumberText}" FontSize="24" FontWeight="Bold" Foreground="#0067A0" />
+            </StackPanel>
+            <TextBlock Text="补录模式：已联动（Take 号 = 文件号）" FontSize="12" Foreground="#2E7D32" IsVisible="{Binding IsLinked}" />
+            <TextBlock Text="补录模式：补录中（Take 号与文件号解绑 → Wild 条）" FontSize="12" Foreground="#C62828" IsVisible="{Binding !IsLinked}" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- 三列滚轮（Scene / Shot / Take） -->
+      <Grid Grid.Row="1" ColumnDefinitions="*,6,*,6,*" Margin="0,0,0,12">
+        <Border Grid.Column="0" BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="8" Padding="6">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="场 Scene" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,4,0,4" />
+            <controls:SlateWheel Items="{Binding SceneCol.Items}" SelectedIndex="{Binding SceneCol.SelectedIndex, Mode=TwoWay}" ItemHeight="44" />
+          </DockPanel>
+        </Border>
+        <Border Grid.Column="2" BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="8" Padding="6">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="镜 Shot" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,4,0,4" />
+            <controls:SlateWheel Items="{Binding ShotCol.Items}" SelectedIndex="{Binding ShotCol.SelectedIndex, Mode=TwoWay}" ItemHeight="44" />
+          </DockPanel>
+        </Border>
+        <Border Grid.Column="4" BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="8" Padding="6">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="次 Take（1..200，N2）" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,4,0,4" />
+            <controls:SlateWheel Items="{Binding TakeCol.Items}" SelectedIndex="{Binding TakeCol.SelectedIndex, Mode=TwoWay}" ItemHeight="44" />
+          </DockPanel>
+        </Border>
+      </Grid>
+
+      <!-- 文件号卡片 + 补录联动（FileCounter；EditRequested → 视图对话框 → ITakeFlowService） -->
+      <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+        <controls:FileCounter x:Name="FileCounterCtl"
+                              Prefix="{Binding CurrentFilePrefix, Mode=TwoWay}"
+                              Linker="{Binding CurrentFileLinker, Mode=TwoWay}"
+                              NumberText="{Binding CurrentFileNumberText, Mode=TwoWay}" />
+        <Button Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0" Padding="14,10"
+                Command="{Binding ToggleLinkCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="补录联动" FontSize="14" />
+            <TextBlock Text="✓ 已联动" FontSize="13" Foreground="#2E7D32" IsVisible="{Binding IsLinked}" />
+            <TextBlock Text="✗ 补录中" FontSize="13" Foreground="#C62828" IsVisible="{Binding !IsLinked}" />
+          </StackPanel>
+        </Button>
+      </Grid>
+
+      <!-- 上一拍备注编辑（prev_note_editor 语义：PreviewHint + DescText/ShotNoteText TwoWay） -->
+      <Border Grid.Row="3" BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,12">
+        <Grid ColumnDefinitions="*,12,*">
+          <StackPanel Grid.Column="0" Spacing="4">
+            <TextBlock Text="录音标注 (Tk Note / Description)" FontSize="13" FontWeight="Bold" />
+            <TextBlock Text="{Binding PreviewHint}" FontSize="12" Foreground="#888888" TextWrapping="Wrap" MinHeight="30" />
+            <TextBox Text="{Binding DescText, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="4">
+            <TextBlock Text="镜头标注 (Shot Note)" FontSize="13" FontWeight="Bold" />
+            <TextBlock Text="麦克风对象以 &lt;主体/&gt; 追加（示例：&lt;Boom/&gt;；MicObjectsExtractor 解析）" FontSize="12" Foreground="#888888" TextWrapping="Wrap" />
+            <TextBox Text="{Binding ShotNoteText, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- 滑动确认条（SlideConfirmBar：TextLeft/TextRight TwoWay ↔ DescText/ShotNoteText） -->
+      <controls:SlideConfirmBar Grid.Row="4" x:Name="SlideBar" Margin="0,0,0,12"
+                                TextLeft="{Binding DescText, Mode=TwoWay}"
+                                TextRight="{Binding ShotNoteText, Mode=TwoWay}"
+                                Transcription="{Binding AsrStatus}"
+                                IsRecording="{Binding IsRecording}"
+                                RecordDuration="00:00" />
+
+      <!-- 操作行：记条/假拍/收工/撤回 + DialFAB×2 + 速览 + Mock ASR -->
+      <Grid Grid.Row="5" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,4,0,8">
+        <Button Content="▲ 记一条" MinWidth="92" Padding="14,10" FontWeight="Bold"
+                Command="{Binding AdvanceTakeCommand}" CommandParameter="{x:Static models:TakeType.Normal}" />
+        <Button Grid.Column="1" Content="假拍 Fake" Margin="8,0,0,0" Padding="14,10" Foreground="#C62828"
+                ToolTip.Tip="假拍条：tk=999、okTk=bad、tkNote='Fake Take'（B4）"
+                Command="{Binding AdvanceTakeCommand}" CommandParameter="{x:Static models:TakeType.Fake}" />
+        <Button Grid.Column="2" Content="收工 End" Margin="8,0,0,0" Padding="14,10" Foreground="#2E7D32"
+                ToolTip.Tip="收工：不递增文件号，history 记 'OK'（B2）"
+                Command="{Binding AdvanceTakeCommand}" CommandParameter="{x:Static models:TakeType.End}" />
+        <Button Grid.Column="3" Content="⟲ 撤回上一条" Margin="8,0,0,0" Padding="14,10"
+                ToolTip.Tip="重按撤回上一条场记（B11）"
+                Command="{Binding RewindTakeCommand}" />
+        <controls:DialFAB Grid.Column="4" x:Name="TkDial" Margin="10,0,0,0"
+                          ToolTip.Tip="声音评价：可(ok) / 弃(bad)" />
+        <controls:DialFAB Grid.Column="5" x:Name="ShtDial" Margin="10,0,0,0"
+                          ToolTip.Tip="画面评价：保(ok) / 过(nice)" />
+        <Button Grid.Column="6" x:Name="QuickViewButton" Content="速览" Margin="10,0,0,0" Padding="14,10"
+                ToolTip.Tip="场记速览（fileName → 录音标注；sublist(40) 已知行为）" />
+        <Button Grid.Column="7" Content="Mock ASR" Margin="10,0,0,0" Padding="14,10"
+                ToolTip.Tip="模拟语音识别开关（ifly 由 Mock 替代）"
+                Command="{Binding ToggleAsrCommand}" />
+      </Grid>
+
+    </Grid>
+  </ScrollViewer>
+
+</UserControl>

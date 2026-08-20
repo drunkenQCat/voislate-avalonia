@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:VoiSlate.ViewModels"
+             xmlns:models="using:VoiSlate.Models"
+             mc:Ignorable="d" d:DesignWidth="1080" d:DesignHeight="720"
+             x:Class="VoiSlate.Views.ScheduleView"
+             x:DataType="vm:ScheduleViewModel">
+
+  <!--
+    Agent C：计划页（对齐 scene_schedule_page 意图：左场列表 / 右镜列表 / 底部场备注）。
+    数据源 IScheduleBook（P0.5 只读 Book；P0.5 播种两份生产场表）。
+    增删改导入为 stub 命令（内存态 + Toast）；NoteEditorWindow 编辑对话框随 B/D 合入后交付。
+  -->
+  <Grid RowDefinitions="Auto,*" ColumnDefinitions="240,12,*" Margin="20">
+
+    <!-- 顶部操作 -->
+    <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+      <Button Content="导入 CSV" Command="{Binding ImportCsvCommand}" />
+      <Button Content="场次＋" Command="{Binding AddSceneCommand}" />
+      <Button Content="镜头＋" Command="{Binding AddShotCommand}" />
+      <Button Content="编辑（占位）" Command="{Binding EditItemCommand}" CommandParameter="shot" />
+      <Button Content="删除场" Foreground="#C62828" Command="{Binding DeleteItemCommand}" CommandParameter="scene" />
+      <Button Content="删除镜" Foreground="#C62828" Command="{Binding DeleteItemCommand}" CommandParameter="shot" />
+      <Button Content="拖拽排序（占位）" Command="{Binding MoveItemCommand}" CommandParameter="scene" />
+    </StackPanel>
+
+    <!-- 左：场列表 -->
+    <ListBox Grid.Row="1" Grid.Column="0"
+             ItemsSource="{Binding Scenes}"
+             SelectedIndex="{Binding SelectedSceneIndex, Mode=TwoWay}">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="models:SceneSchedule">
+          <Border Padding="10,8" Margin="0,0,0,6" CornerRadius="6" Background="#F5F2FA">
+            <StackPanel Spacing="2">
+              <TextBlock FontWeight="Bold" FontSize="15">
+                <Run Text="{Binding Info.Name}" /><Run Text=" 场" />
+              </TextBlock>
+              <TextBlock Text="{Binding Info.Note.Type}" FontSize="12" Foreground="#888888" />
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <!-- 右：镜列表 + 场备注 -->
+    <Grid Grid.Row="1" Grid.Column="2" RowDefinitions="*,Auto">
+      <ListBox Grid.Row="0" ItemsSource="{Binding SelectedSceneShots}"
+               SelectedIndex="{Binding SelectedShotIndex, Mode=TwoWay}"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="models:ScheduleItem">
+            <Border Padding="10,8" Margin="0,0,0,6" CornerRadius="6"
+                    BorderBrush="#EEEEEE" BorderThickness="1">
+              <StackPanel Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock FontWeight="Bold" FontSize="15">
+                    <Run Text="{Binding Name}" /><Run Text=" 镜" />
+                  </TextBlock>
+                  <ItemsControl ItemsSource="{Binding Note.Objects}" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="4" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <Border Background="#CE93D8" CornerRadius="10" Padding="7,1" Margin="0,1">
+                          <TextBlock Text="{Binding}" FontSize="12" />
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+                <TextBlock Text="{Binding Note.Type, StringFormat='景别：{0}'}" FontSize="12" Foreground="#666666" />
+                <TextBlock Text="{Binding Note.Append}" FontSize="12" Foreground="#888888" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <!-- 场备注（scene note.append） -->
+      <Border Grid.Row="1" Margin="0,8,0,0" Padding="14" Background="#F2F5DE" CornerRadius="8">
+        <StackPanel Spacing="3">
+          <TextBlock FontWeight="Bold" FontSize="15">
+            <Run Text="{Binding SelectedScene.Info.Name}" /><Run Text=" 场备注" />
+          </TextBlock>
+          <TextBlock Text="{Binding SelectedScene.Info.Note.Append}" TextWrapping="Wrap" Foreground="#444444" />
+          <TextBlock Text="{Binding SelectedScene.Info.Note.Type, StringFormat='场景：{0}'}" FontSize="12" Foreground="#666666" />
+        </StackPanel>
+      </Border>
+    </Grid>
+
+  </Grid>
+
+</UserControl>

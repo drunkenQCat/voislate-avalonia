@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VoiSlate.ViewModels"
+        x:Class="VoiSlate.Views.LogEditorWindow"
+        x:DataType="vm:LogEditorViewModel"
+        Title="编辑场记"
+        Width="560"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <!-- Agent C：LogEditor 对话框（契约 §6；保存/删除经 ITakeFlowService 唯一写入口）。 -->
+  <StackPanel Margin="20" Spacing="10">
+    <TextBlock Text="{Binding FileName}" FontSize="20" FontWeight="Bold" Foreground="#0067A0" />
+    <TextBlock FontSize="12" Foreground="#888888"
+               Text="文件名与场/镜/次由原记录决定（stub 仅编辑备注与评价；文件号编辑走 FileCounter / ITakeFlowService，BLOCKER-1）"
+               TextWrapping="Wrap" />
+    <TextBox Text="{Binding TkNote, Mode=TwoWay}" PlaceholderText="录音标注 TkNote" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44" />
+    <TextBox Text="{Binding ShtNote, Mode=TwoWay}" PlaceholderText="镜头标注 Shot Note" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44" />
+    <TextBox Text="{Binding ScnNote, Mode=TwoWay}" PlaceholderText="场备注 Scene Note" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44" />
+    <Grid ColumnDefinitions="*,12,*">
+      <StackPanel Grid.Column="0" Spacing="4">
+        <TextBlock Text="声音评价 (OK Take)" FontSize="13" />
+        <ComboBox ItemsSource="{Binding TkStatuses}" SelectedItem="{Binding OkTk, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+      </StackPanel>
+      <StackPanel Grid.Column="2" Spacing="4">
+        <TextBlock Text="画面评价 (OK Shot)" FontSize="13" />
+        <ComboBox ItemsSource="{Binding ShtStatuses}" SelectedItem="{Binding OkSht, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+      </StackPanel>
+    </Grid>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="删除" Foreground="#C62828" Command="{Binding DeleteCommand}" />
+      <Button Content="保存" Classes="accent" Command="{Binding SaveCommand}" />
+    </StackPanel>
+  </StackPanel>
+
+</Window>

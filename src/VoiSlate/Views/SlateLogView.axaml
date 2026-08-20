@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:VoiSlate.ViewModels"
+             xmlns:models="using:VoiSlate.Models"
+             xmlns:views="using:VoiSlate.Views"
+             mc:Ignorable="d" d:DesignWidth="1080" d:DesignHeight="720"
+             x:Class="VoiSlate.Views.SlateLogView"
+             x:DataType="vm:SlateLogViewModel">
+
+  <!--
+    Agent C：场记页（对齐 slate_log_tabs / slate_log_page 意图：日期切换 + 当日卡片列表）。
+    卡片：fileName + okTk/okSht 色点 + tkNote/shtNote；编辑经 LogEditorWindow（ITakeFlowService）；
+    删除经 DeleteCommand；导出为占位命令（待 IExportService）。
+  -->
+  <UserControl.Resources>
+    <views:TkStatusToBrushConverter x:Key="TkBrush" />
+    <views:ShtStatusToBrushConverter x:Key="ShtBrush" />
+  </UserControl.Resources>
+
+  <Grid RowDefinitions="Auto,Auto,*" Margin="20">
+    <!-- 顶部：日期切换 + 导出 -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <TextBlock Text="日期" VerticalAlignment="Center" Foreground="#666666" />
+        <ListBox ItemsSource="{Binding Dates}"
+                 SelectedItem="{Binding SelectedDate, Mode=TwoWay}"
+                 HorizontalAlignment="Left" MinWidth="80">
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="6" />
+            </ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+        </ListBox>
+        <TextBlock Text="{Binding Today, StringFormat='今日：{0}'}" VerticalAlignment="Center"
+                   FontSize="12" Foreground="#0067A0" />
+      </StackPanel>
+      <Button Grid.Column="1" Content="导出 JSON" Command="{Binding ExportCommand}" VerticalAlignment="Center" />
+    </Grid>
+
+    <!-- 列表 -->
+    <ListBox Grid.Row="2" ItemsSource="{Binding TodayLogs}"
+             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="models:SlateLogItem">
+          <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="8"
+                  BorderBrush="#DDDDDD" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Grid.Column="0" Spacing="3">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Ellipse Width="12" Height="12" Fill="{Binding OkTk, Converter={StaticResource TkBrush}}"
+                           VerticalAlignment="Center" ToolTip.Tip="OK Take（灰/绿/红）" />
+                  <Ellipse Width="12" Height="12" Fill="{Binding OkSht, Converter={StaticResource ShtBrush}}"
+                           VerticalAlignment="Center" ToolTip.Tip="OK Shot（灰/绿/金黄）" />
+                  <TextBlock Text="{Binding FileName}" FontWeight="Bold" FontSize="15" />
+                  <TextBlock Foreground="#777777">
+                    <Run Text="{Binding Scn}" /><Run Text="场" />
+                  </TextBlock>
+                  <TextBlock Text="/" Foreground="#BBBBBB" />
+                  <TextBlock Foreground="#777777">
+                    <Run Text="{Binding Sht}" /><Run Text="镜" />
+                  </TextBlock>
+                  <TextBlock Foreground="#B8860B">
+                    <Run Text="Tk " /><Run Text="{Binding Tk}" />
+                  </TextBlock>
+                </StackPanel>
+                <TextBlock Text="{Binding TkNote}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding ShtNote}" TextWrapping="Wrap" Foreground="#555555" />
+                <TextBlock Text="{Binding ScnNote}" TextWrapping="Wrap" FontSize="12" Foreground="#888888" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top" Margin="8,0,0,0">
+                <Button Content="编辑" Click="OnEditClick" Tag="{Binding}" />
+                <Button Content="删除" Foreground="#C62828"
+                        Command="{Binding $parent[ListBox].((vm:SlateLogViewModel)DataContext).DeleteCommand}"
+                        CommandParameter="{Binding}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </Grid>
+
+</UserControl>
