@@ -1,7 +1,7 @@
 # VoiSlate → Avalonia 迁移计划（migration-plan.md）
 
-> 版本：v0.6（已闭环 Review 第 1-4 轮全部意见）｜最后更新：2026-08-20
-> 状态：🔄 五轮 Review 迭代中（已完成 4/5）
+> 版本：v0.7（**五轮 Review 全部闭环**，可进入 M0）｜最后更新：2026-08-20
+> 状态：✅ 五轮 Review 完成 → 下一阶段：编码（M0 骨架 → P0.5 → P1 并行）
 
 ---
 
@@ -122,7 +122,7 @@
 - **ADR-005 序列化**：camelCase + **`JsonStringEnumConverter(JsonNamingPolicy.CamelCase)`（显式命名策略，对齐原件短名枚举）**；**导出格式与原件一致（无日期字段、含 fake/wild 哨兵值）**；`JsonSerializer` 注释指明兼容对象。
 - **ADR-006 备份**：IBackupService，PeriodicTimer(3min) + 退出前 + 手动；`Documents/VoiSlate Logs/slate_backup{yymmdd}-{hour}clock.json`。
 - **ADR-007 日志**：Serilog 滚动文件 + Debug 控制台；ITimeProvider 注入。
-- **ADR-008 生命周期**（Review 1 新增）：DI 容器统一管理 IDisposable（LiteDB/PeriodicTimer/事件订阅），应用退出顺序：停定时器 → 备份 → 关库。
+- **ADR-008 生命周期**（N4 成文）：**启动序** `LiteDbStore.Open → SeedService.EnsureSeeded（空库播种）→ IDayRolloverService.OnStartup（跨天补偿）→ DI 装配 → MainWindow`；**退出序** 停 PeriodicTimer → BackupService 备份 → 关库；Scoped VM 进入创建/退出释放（契约 B5）；DI 容器统一管理 IDisposable（LiteDB/PeriodicTimer/事件订阅）。
 - **ADR-009 错误策略**（Review 1 新增）：业务异常（DuplicateItemException 等）由 VM 捕获转对话框/Toast；IO/存储异常统一 ILogger.Error + Toast，不崩溃；不复制原空 catch。
 
 ## 5. 新项目结构与 Agent 分工（Review 1 修订）
@@ -175,7 +175,7 @@ voislate-avalonia/
 ## 6. 开发顺序（含 P0.5 垂直切片）
 
 - **M0 骨架**（主 Agent）：sln + csproj（net10.0 + Avalonia 12.1.1 + CommunityToolkit.Mvvm + LiteDB + CsvHelper + Serilog）+ DI + 主题色板 + CI 骨架 + **Directory.Build.props**（任何 Agent 禁改）
-- **P0.5 垂直切片**（主 Agent）：**一条记录链路贯通**——Models(SlateLogItem) + ITakeFlowService(记条/撤回核心时序 B1-B5，经 ISessionState 不依赖 VM) + LiteDB 存储 + 单测 + 冒烟 + Fake 集（TestDoubles）+ **生产种子（dummy 两份场表）** + **接口桩（ITimeProvider/IFileNamingService）**。**Gate 0→Gate 1 必备动作：contracts.md 升级至 v0.4 签名级并全量核对**（并行稳定接口 = contract v0.4 §2-§6）。**P0.5 移交清单（C-3）**：SlateLogItem/ITakeFlowService/LiteDbStore→A/E；SeedService+种子数据→E；TestDoubles→各所有者（E 拥 Services Fake、A 拥模型 fixture、B 只消费）；App 占位→C；ITimeProvider/IFileNamingService 桩→E
+- **P0.5 垂直切片**（主 Agent）：**一条记录链路贯通**——Models(SlateLogItem) + ITakeFlowService(记条/撤回核心时序 B1-B5/B7，经 ISessionState 不依赖 VM；**B2/B3 语义由此阶段单测成文锁定（N1）**) + LiteDB 存储 + 单测 + 冒烟 + Fake 集（TestDoubles）+ **生产种子（dummy 两份场表）** + **接口桩（ITimeProvider/IFileNamingService）**。**Gate 0→Gate 1 必备动作：contracts.md v0.5 签名级全量核对**（并行稳定接口 = contract v0.5 §2-§6）。**P0.5 移交清单（C-3）**：SlateLogItem/ITakeFlowService/LiteDbStore→A/E；SeedService+种子数据→E；TestDoubles→各所有者（E 拥 Services Fake、A 拥模型 fixture、B 只消费）；App 占位→C；ITimeProvider/IFileNamingService 桩→E
 - **P1 并行**（worktree）：A / E / B / C / D 五分支；**main 冻结**（仅允许 docs 契约提交）；每 Agent 只改自己目录、禁改 docs/根配置；D 无编译依赖可首期开工、**可提前合入**（A 合入后即可）
 - **P2 合并**：A→E→B→(D 任意时点)→C；**P0.5 产物所有权移交**：`SlateLogItem.cs`/`ITakeFlowService.cs`/`LiteDbStore.cs` 及单测合入后演进权归 A/E，主 Agent 不再修改；**App.axaml.cs 交接**：DI 注册块标记 `// DI-REGISTRATION (C keep)`，C 覆盖时全量保留（C-5）；**VM 构造变更纪律**：B 改 VM ctor 先 bump 契约，C 同步注册（C-5）
 - **P3 验证**：dotnet build 0 错误无显著 warning → dotnet test 全绿 → 冒烟（含重启恢复与跨天假时钟（ITimeProvider 注入））
@@ -204,7 +204,7 @@ voislate-avalonia/
 
 ## 8. 契约
 
-见 `docs/contracts.md`（**v0.4 签名级**）：Services 接口签名、VM 成员与命令、控件行为协议（SlateWheel/SlideConfirmBar/DialFAB/FileCounter/TagChips/Toast/LoadingOverlay）、导航与主题资源键、测试与编译基线。**并行开发唯一依据；未达签名级不开工。**
+见 `docs/contracts.md`（**v0.5 最终签名版**）：Services 接口签名、VM 成员与命令、控件行为协议（SlateWheel/SlideConfirmBar/DialFAB/FileCounter/TagChips/Toast/LoadingOverlay）、导航与主题资源键、测试与编译基线。**并行开发唯一依据；未达签名级不开工。**
 
 ## 9. 验收标准
 
@@ -222,10 +222,10 @@ voislate-avalonia/
 
 ## 10. 阶段门禁（Gate）
 
-- **Gate 0**：五轮 review 全部闭环 + contracts v0.4 签名级 → M0
+- **Gate 0**：五轮 review 全部闭环 + contracts v0.5 签名级 → M0
 - **Gate 1**：M0 + **P0.5 垂直切片**（记条链路 build+test+冒烟 + 种子 + TestDoubles）→ 开五 worktree
 - **Gate 2**：各 worktree 模块 build + 单测 → 合并
 - **Gate 3**：合并后全量 build + test + 冒烟（含重启恢复/跨天假时钟）→ 发布
 
 ---
-*（v0.6：闭环 Review 4——ISessionState 解耦 Service→VM 逆向依赖（C-1）、FileNumberingService 唯一实例身份（C-2）、P0.5 移交清单补全种子/TestDoubles/App 占位/接口桩（C-3）、TestDoubles 随接口所有者（C-4）、App 注册交接协议与 VM ctor 变更纪律（C-5）、A↔E 事实串行对说明；配套 contracts.md v0.4。下一步：Review 第 5 轮——最终审核（可执行性/遗漏/验收））*
+*（v0.7：**五轮 Review 全部闭环**——Review 1 架构/遗漏/风险、Review 2 拆分与分工、Review 3 MVVM 与映射、Review 4 并行实操、Review 5 最终审核（BLOCKER-1 文件号写路径闭环 + N1-N4 备忘）。配套 contracts.md v0.5 最终签名版。Gate 0 达成，下一阶段：M0 骨架 → P0.5 垂直切片 → P1 五 worktree 并行。*）*

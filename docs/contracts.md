@@ -1,6 +1,6 @@
 # VoiSlate Avalonia 模块契约规范（contracts.md）
 
-> 版本：v0.4（闭环 Review 第 4 轮 C-1~C-5：ISessionState 解耦/FileNumberingService 实例身份/移交清单/TestDoubles 归属/App 交接）｜最后更新：2026-08-20
+> 版本：v0.5（最终签名版；闭环 Review 第 5 轮 BLOCKER-1 + N1-N4）｜最后更新：2026-08-20
 > 用途：第三阶段并行开发唯一契约依据。**契约未达签名级前不开工**（风险 R8）。
 > 变更纪律：契约变更仅由主 Agent 更新；各 worktree 同步时 rebase，冲突概率近零。
 
@@ -48,8 +48,8 @@
 | `IHardwareKeyService` | `event Action<HardwareKey>? KeyPressed`；`enum HardwareKey { VolumeUp, VolumeDown }`；仅记录页激活时订阅 | 桌面 no-op；Android 增强后续 |
 | `IDayRolloverService` | `bool IsNewDay()`, `void OnStartup()`, 定时检测（PeriodicTimer 1min 起） | 跨天：recordCount=1 + 清 history + 日期登记 |
 | `IExportService` | `string SerializeLogs(IEnumerable<SlateLogItem>)`, `Task SaveToFileAsync(string dir, string name, string content)` | camelCase JSON；格式兼容原件 |
-| `ISessionState` | `int SceneIndex { get; set; }`, `int ShotIndex { get; set; }`, `int TakeIndex { get; set; }`, `int TakeCount { get; }`, `bool IsLinked { get; set; }`, `event Action? SessionChanged`；由 `RecordingSessionViewModel` 实现（B）；**P0.5 只做最小实现**——ITakeFlowService **只依赖本接口**，不依赖 VM 具体类型（C-1，消除 Services→ViewModels 逆向依赖） | — |
-| `ITakeFlowService` | `Task AddItemAsync(TakeType type, CancellationToken)`, `Task RewindAsync(CancellationToken)`, `Task SaveEditAsync(SlateLogItem item, int index, CancellationToken)`, `Task DeleteItemAsync(int index, CancellationToken)`, `event Action? LogsChanged`, `event Action<int>? FileNumberChanged`, `event Action? HistoryChanged`；注入 `ISessionState`、`FileNumberingService`（**唯一实例由本服务持用，DI 单例，C-2**）、ILogRepository、IPickerHistoryStore、IHapticsService、IToastService、ITimeProvider；**唯一写入口纪律**：本服务是 ILogRepository / IPickerHistoryStore / 文件号存储变更的**唯一写者**（含日志编辑/删除）；业务规则 B1-B5/B11 全部在此实现 | P0.5 先实现核心；演进权归 E |
+| `ISessionState` | `int SceneIndex { get; set; }`, `int ShotIndex { get; set; }`, `int TakeIndex { get; set; }`, `int TakeCount { get; }`（**=200**，take 列范围常量，对齐原版 take 1..200，N2 已定）, `bool IsLinked { get; set; }`, `event Action? SessionChanged`；由 `RecordingSessionViewModel` 实现（B）；**P0.5 只做最小实现**——ITakeFlowService **只依赖本接口**，不依赖 VM 具体类型（C-1，消除 Services→ViewModels 逆向依赖） | — |
+| `ITakeFlowService` | `Task AddItemAsync(TakeType type, CancellationToken)`, `Task RewindAsync(CancellationToken)`, `Task SaveEditAsync(SlateLogItem item, int index, CancellationToken)`, `Task DeleteItemAsync(int index, CancellationToken)`, **`Task SetFileNumberAsync(int value, CancellationToken)`**, **`Task SetLinkerAsync(string linker, CancellationToken)`**, **`Task SetPrefixAsync(int mode, string? custom, CancellationToken)`**, `event Action? LogsChanged`, `event Action<int>? FileNumberChanged`, `event Action? HistoryChanged`；注入 `ISessionState`、`FileNumberingService`（**唯一实例由本服务持用，DI 单例，C-2**）、ILogRepository、IPickerHistoryStore、IHapticsService、IToastService、ITimeProvider；**唯一写入口纪律**：本服务是 ILogRepository / IPickerHistoryStore / **文件号（FileNumberingService + 其持久化）** 变更的**唯一写者**（含日志编辑/删除/文件号编辑，BLOCKER-1 已闭环）；`FileNumberingService.NumberChanged` **内部转发为 `FileNumberChanged`**（对外统一事件，N4）；业务规则 B1-B5/B7/B11 全部在此实现 | P0.5 先实现核心；演进权归 E |
 | `SeedService` | `Task EnsureSeededAsync()` | 空库播种两份生产场表（dummy_data 语义）；**P0.5 产出，所有权移交 E（C-3）** |
 
 ## 4. ViewModels 契约（Agent B 产出，依赖 §2/§3）
@@ -77,7 +77,7 @@
 | `SlateWheel` | `Items`(OneWay)、`SelectedIndex`(TwoWay)、`ItemHeight`(double,默认48)、`IsLoop`(bool,默认false) | `SelectedItemChanged(string)` | 手势拖拽**连续更新** SelectedIndex、松手**吸附**最近项；鼠标滚轮滚动；fling 惯性可选；`ScrollTo(index, animate)` 由 VM 调用，控件负责动画（200ms ease-in）；程序化滚动与手势共用同一状态通路 |
 | `SlideConfirmBar` | `State`(Idle/Pressed/Armed, OneWay)、`IsRecording`、`RecordDuration`(string)、`Transcription`(OneWay)、`TextLeft`/`TextRight`(**TwoWay** ↔ DescText/ShotNoteText) | `SlideRight`、`SlideLeft` | 文本为**实时 TwoWay**（键入即回源）；滑动触发时对同属性做**幂等补提交**（不覆盖未保存输入）；水平拖动：右滑过 `slideLength` 阈值触发 SlideRight、左滑过 0 触发 SlideLeft；松手 200ms 回弹；背景按位置红→绿插值；**行为决策（Review 2）**：SlideRight/SlideLeft 触发时确认当前备注输入（幂等） |
 | `DialFAB`（×2 实例） | `Options: IReadOnlyList<DialOption>`、`SelectedOption`(TwoWay) | `SelectionChanged(DialOption)`、`Opened/Closed` | `DialOption`（D 产出，仅显示数据：`Label/Icon/EnumValue: object`）；实例1：声音可(ok)/声音弃(bad)；实例2：画面保(ok)/画面过(nice)；选中后**背景色/图标随状态回显**（NotChecked=浅色/Ok=绿/Bad=红/Nice=金黄）；展开点外部关闭；接线 `SetOkTake/SetOkShot/ResetOkStatus` |
-| `FileCounter` | `Prefix`/`Linker`/`NumberText`(string, TwoWay)、`NumberValue`(int 只读) | `EditRequested(EditRequestedSection)` | `EditRequestedSection { Prefix, Linker, Number }`（D 产出）；编辑对话框：Prefix=三模式 Toggle(Date/Sound Devices/Custom)+custom 文本；Linker=文本；Number=整型（不输入 0，显示 D3 补零）；**B7 三向同步归属 RecordViewModel**（RecordCount ↔ FileNumberingService.Number ↔ FileNumberingService.SetValue → 编辑文件号→ISessionSettingsStore 同步） |
+| `FileCounter` | `Prefix`/`Linker`/`NumberText`(string, TwoWay)、`NumberValue`(int 只读) | `EditRequested(EditRequestedSection)` | `EditRequestedSection { Prefix, Linker, Number }`（D 产出）；编辑对话框：Prefix=三模式 Toggle(Date/Sound Devices/Custom)+custom 文本；Linker=文本；Number=整型（不输入 0，显示 D3 补零）；**B7 三向同步归属 ITakeFlowService（BLOCKER-1 修正）**：RecordCount 经 AdvanceTake/FileNumberChanged 双向同步；编辑文件号经 `SetFileNumberAsync/SetLinkerAsync/SetPrefixAsync`（服务内 FileNumberingService 改值 → ISessionSettingsStore 持久化 → FileNumberChanged 通知）；RecordViewModel 不直改文件号 |
 | `TagChips` | `Tags: IReadOnlyList<string>` | `AddRequested/EditRequested(string)/DeleteRequested(string)` | 流式排列；Add/Edit 共用编辑对话框（TagEditingMessage 语义） |
 | `ToastHost` | `Message`(OneWay) | — | 全局底部 Toast；IToastService 实现 |
 | `LoadingOverlay` | `IsActive`(OneWay) | — | 全局覆盖层 |
@@ -85,10 +85,12 @@
 ## 6. 页面与导航契约（Agent C 产出）
 
 - **App.axaml.cs 所有权归 C**（M0/P0.5 只放占位并注明 C 接管；占位中 DI 注册写为标记区域 `// DI-REGISTRATION (C keep)`——**C 覆盖 App.axaml.cs 时全量保留注册块**，C-5）
+- **启动时序（N4，ADR-008 成文）**：`LiteDbStore.Open` → `SeedService.EnsureSeededAsync`（空库播种）→ `IDayRolloverService.OnStartup`（跨天补偿）→ DI 装配完成 → MainWindow 显示；退出序：停 PeriodicTimer → 备份 → 关库
 - **VM 构造变更纪律（C-5）**：B 修改任一 VM 构造签名必须先 bump 契约 v0.4+，C 据此更新 DI 注册，杜绝尾合语义失配
 - DI：Microsoft.Extensions.DependencyInjection；单例 Services + Session/SlateLog VM；Scoped VM 经工厂解析（记录页进入/退出）；`ITakeFlowService` 注册为单例并**唯一持用 FileNumberingService 实例**（C-2）
 - `MainWindow`：左侧导航（记录/计划/场记/设置）+ `ContentControl` ↔ `MainViewModel.CurrentPage`（**CurrentPage 为 ViewModel 实例**；VM→View 映射用 App.axaml 资源 `DataTemplate`（DataTemplate DataType={x:Type vm}）——C 负责映射表注册，B 只产 VM 类型）
 - 页面：`RecordView` / `ScheduleView` / `SlateLogView` / `SettingsView`
+- **RecordView 组合（N3 补充）**：SlateWheel×3 + FileCounter + SlideConfirmBar + DialFAB×2 + 场镜次数字卡（current_file_monitor 语义）+ 当前文件号卡（current_take_monitor 语义）+ 上一拍备注编辑（prev_note_editor 语义）+ 场记速览对话框（quick_view_log_dialog 语义，sublist(40) 已知行为）——全部 UI 组件归 C，按契约 §5 控件绑定
 - 对话框：`LogEditorWindow` / `NoteEditorWindow`（DialogService 统一注入 DataContext、Owner=MainWindow）
 - 主题资源键（Themes/VoiSlatePalette.axaml）：`VoiSlate.Bg` / `VoiSlate.Primary`(bahamaBlue #0067A0) / `VoiSlate.OkGreen` / `VoiSlate.BadRed` / `VoiSlate.NiceGold` / `VoiSlate.TextHint`
 
@@ -100,4 +102,4 @@
 - Git：worktree 分支 `agent-a-models` / `agent-e-services` / `agent-b-viewmodels` / `agent-d-controls` / `agent-c-views`；**main 冻结（仅 docs 契约提交）**；合并序 A→E→B→D→C，**D 可提前合入**（A 合入后即可）
 
 ---
-*v0.4 变更（闭环 Review 4）：新增 `ISessionState` 接口，ITakeFlowService 经其访问会话状态，消除 Services→ViewModels 逆向依赖（C-1）；FileNumberingService 唯一实例由 ITakeFlowService 持用，RecordViewModel 不注入、经 FileNumberChanged+Activate 同步（C-2）；P0.5 移交清单扩展：SeedService→E、TestDoubles→各所有者、App 占位→C、ITimeProvider/IFileNamingService 桩→P0.5 预产归 E（C-3）；TestDoubles 归属规则=随接口所有者（C-4）；App.axaml.cs 交接协议（DI 标记区域）+ VM 构造变更须 bump 契约（C-5）。*
+*v0.5 变更（闭环 Review 5）：**BLOCKER-1**——ITakeFlowService 增 `SetFileNumberAsync/SetLinkerAsync/SetPrefixAsync`（文件号编辑唯一入口），FileCounter B7 同步归属改由服务承载，消除与 C-2 矛盾；N1（B2/B3 语义由 P0.5 单测成文锁定）；N2（ISessionState.TakeCount=200）；N3（RecordView 组合 UI 明细入契约）；N4（启动时序 ADR-008 成文 + FileNumberChanged 转发约定）。*
