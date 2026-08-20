@@ -1,7 +1,7 @@
 # VoiSlate → Avalonia 迁移计划（migration-plan.md）
 
-> 版本：v0.7（**五轮 Review 全部闭环**，可进入 M0）｜最后更新：2026-08-20
-> 状态：✅ 五轮 Review 完成 → 下一阶段：编码（M0 骨架 → P0.5 → P1 并行）
+> 版本：v0.8（五轮 Review 已闭环；P0.5 垂直切片交付 Gate 1；P1 并行开发进行中）｜最后更新：2026-08-20
+> 状态：✅ Gate 0（五轮 review + contracts v0.5）→ ✅ Gate 1（P0.5 垂直切片：build 0w/0e、33/33 测试、应用启动+种子入库、commit cfc1b14）→ 🔄 P1 五 worktree 并行（agent-a..e @ cfc1b14）
 
 ---
 
