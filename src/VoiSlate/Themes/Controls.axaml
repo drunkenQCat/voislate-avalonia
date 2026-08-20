@@ -4,7 +4,7 @@
 
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="urn:voislate:controls">
+        xmlns:controls="using:VoiSlate.Controls">
 
   <!-- ============ SlideConfirmBar（滑动确认条） ============ -->
 
@@ -12,7 +12,7 @@
     <Setter Property="Height" Value="64" />
     <Setter Property="Template">
       <Setter.Value>
-        <ControlTemplate TargetType="controls|SlideConfirmBar">
+        <ControlTemplate TargetType="controls:SlideConfirmBar">
           <Grid>
             <!-- 背景：代码按位置红→绿插值（PART_Background.Background 由控件更新）。 -->
             <Border x:Name="PART_Background" Background="#FFEF9A9A" CornerRadius="22" ClipToBounds="True">
@@ -53,7 +53,7 @@
     <Setter Property="Height" Value="56" />
     <Setter Property="Template">
       <Setter.Value>
-        <ControlTemplate TargetType="controls|DialFAB">
+        <ControlTemplate TargetType="controls:DialFAB">
           <Grid>
             <!-- 主按钮：圆形，背景/图标由控件按 SelectedOption 状态回显。 -->
             <Border x:Name="PART_MainButton" Width="56" Height="56" CornerRadius="28"
@@ -79,7 +79,7 @@
   <Style Selector="controls|FileCounter">
     <Setter Property="Template">
       <Setter.Value>
-        <ControlTemplate TargetType="controls|FileCounter">
+        <ControlTemplate TargetType="controls:FileCounter">
           <Border Background="#FFCFD8DC" CornerRadius="8" Padding="14,8">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
               <StackPanel Orientation="Vertical" Spacing="2">
@@ -118,7 +118,7 @@
   <Style Selector="controls|TagChips">
     <Setter Property="Template">
       <Setter.Value>
-        <ControlTemplate TargetType="controls|TagChips">
+        <ControlTemplate TargetType="controls:TagChips">
           <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
             <WrapPanel x:Name="PART_Items" Orientation="Horizontal" />
           </ScrollViewer>
@@ -132,7 +132,7 @@
   <Style Selector="controls|ToastHost">
     <Setter Property="Template">
       <Setter.Value>
-        <ControlTemplate TargetType="controls|ToastHost">
+        <ControlTemplate TargetType="controls:ToastHost">
           <Grid>
             <Border x:Name="PART_Toast" IsVisible="False" Opacity="0"
                     Background="#E6000000" CornerRadius="18" Padding="14,8"
@@ -150,7 +150,7 @@
   <Style Selector="controls|LoadingOverlay">
     <Setter Property="Template">
       <Setter.Value>
-        <ControlTemplate TargetType="controls|LoadingOverlay">
+        <ControlTemplate TargetType="controls:LoadingOverlay">
           <Panel x:Name="PART_Root" Background="#66000000" IsVisible="False">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
               <ProgressBar IsIndeterminate="True" Width="120" Height="6" />
