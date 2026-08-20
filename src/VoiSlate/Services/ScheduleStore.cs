@@ -19,7 +19,11 @@ public interface ScheduleStore
     Task ClearAsync();
 }
 
-public sealed class LiteDbScheduleStore(LiteDbStore store) : ScheduleStore
+/// <summary>
+/// 同时实现 B 交付的契约名 <see cref="IScheduleStore"/>（成员集与 <see cref="ScheduleStore"/> 一致），
+/// 使 ScheduleViewModel（依赖 IScheduleStore）可直连本 LiteDB 实现；两接口并存互不冲突。
+/// </summary>
+public sealed class LiteDbScheduleStore(LiteDbStore store) : ScheduleStore, IScheduleStore
 {
     private sealed class ScheduleDoc
     {
