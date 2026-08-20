@@ -1,7 +1,7 @@
 # VoiSlate → Avalonia 迁移计划（migration-plan.md）
 
-> 版本：v0.3（已闭环 Review 第 1 轮全部 14 条建议）｜最后更新：2026-08-20
-> 状态：🔄 五轮 Review 迭代中（已完成 1/5）
+> 版本：v0.4（已闭环 Review 第 1、2 轮全部意见）｜最后更新：2026-08-20
+> 状态：🔄 五轮 Review 迭代中（已完成 2/5）
 
 ---
 
@@ -21,7 +21,8 @@
 声音场记：拍摄现场记录每一条录音的场/镜/次、文件名编号、备注与 OK/NG 评价；支持拍摄计划（场→镜→标签/对象/备注）、按日期查改场记、JSON 导出/备份、补录（Wild）与收工（End）拍板语义。
 
 ### 2.2 模块规模
-40 dart 文件 / 6665 行。分层：models(9+2 gen) / data(3) / helper(3) / providers(4) / pages(6) / widgets(12)。
+40 dart 文件 / 6665 行。分层：models(7 手写 + 2 生成 = 9) / data(3) / helper(3) / providers(4) / pages(6 业务 + 1 debug 测试页 = 7) / widgets(12)。
+**不迁移清单（明确决策）**：3 个 .g.dart（生成物）、my_ifly_key.dart + ifly_key_example.dart（密钥 → Mock 替代）、scene_schedule_page_test.dart（debug 专用识别测试页）、android_physical_buttons（死依赖）、设置页音量键 stub。
 
 ### 2.3 核心业务规则（精确版——含 Review 1 时序修正）
 
@@ -151,19 +152,31 @@ voislate-avalonia/
 
 | Agent | 模块 | 依赖 | 输出 |
 |---|---|---|---|
-| A | Models + 枚举 + 集合校验 | 无 | Models/*.cs + 单测 |
-| E | Services 全层（含 ITakeFlowService/IPickerHistoryStore/Mocks） | A | Services + Infra + 单测 |
-| B | ViewModels | A,E | ViewModels + 单测 |
-| D | 公共控件与主题 | 契约（contracts.md） | Controls + Themes |
-| C | 页面视图与导航 | B,D | Views + App.axaml |
+| A | Models + 枚举(显式数值) + 集合校验 + **FileNumberingService**(纯状态) | 无 | Models/*.cs + 单测 |
+| E | Services 全层（含 ITakeFlowService/IPickerHistoryStore/Mocks；P0.5 产物所有权移交） | A | Services + Infra + 单测 |
+| B | ViewModels（含 MainViewModel；音量键订阅） | A,E | ViewModels + 单测 |
+| D | 公共控件与主题（无编译依赖，**可最早合入**） | 契约 v0.2 | Controls + Themes |
+| C | 页面视图与导航 + 4 个记录页漏项 UI（current_file_monitor/current_take_monitor/prev_note_editor/quick_view_log_dialog）+ App.axaml.cs | B,D | Views + App |
 
-## 6. 开发顺序（含 P0.5 垂直切片——Review 1 采纳）
+**40 文件归属表（Review 2 逐项核对；seed 归 P0.5）**：
 
-- **M0 骨架**（主 Agent）：sln + csproj（net10.0 + Avalonia 12.1.1 + CommunityToolkit.Mvvm + LiteDB + CsvHelper + Serilog）+ DI + 主题色板 + CI 骨架
-- **P0.5 垂直切片**（主 Agent）：**一条记录链路贯通**——Models(SlateLogItem) + ITakeFlowService(记条/撤回核心时序 B1-B5) + LiteDB 存储 + 单测 + 冒烟（可运行最小 UI 触发一次记条落库）。验证契约与存储保序，再开五 worktree
-- **P1 并行**：worktree A / E / B / C / D（依赖 A→E→B→C；D 全程并行）
-- **P2 合并**：A→E→B→D→C，解冲突，统一命名
-- **P3 验证**：dotnet build 0 错误无显著 warning → dotnet test 全绿 → 冒烟（含 **重启恢复** 与 **跨天假时钟**（ITimeProvider 注入）两项 Review 1 补充）
+| Agent | 承接文件 |
+|---|---|
+| A | recorder_file_num / recorder_type / slate_log_item / slate_schedule / tag_editing_message / take_type / tk_pending（7 手写 models）+ FileNumberingService |
+| E | helper×3（mic_objects_extractor / schedule_csv_parser / local_notification→DayRolloverService）+ 全部存储与 Mock 服务（无直接 dart 源） |
+| B | providers×4（slate_status/slate_log/slate_picker → 3 个 VM；value_scroll_control → RecordViewModel 内联）+ MainViewModel |
+| D | widgets：slate_picker→SlateWheel、file_counter→FileCounter、recorder_joystick→SlideConfirmBar、shot/take_ok_dial→DialFAB×2、tag_chips→TagChips（5 个控件）+ 主题 |
+| C | pages×6（main/record/scene_schedule/settings_configue/slate_log/slate_log_tabs）+ widgets：log_editor、note_editor、current_file_monitor、current_take_monitor、prev_note_editor、quick_view_log_dialog（6 个 UI 组件） |
+| P0.5 | data/dummy_data（生产种子两份场表） |
+| 不迁移 | 3 个 .g.dart、my_ifly_key、ifly_key_example、scene_schedule_page_test、android_physical_buttons 声明、设置页音量键 stub |
+
+## 6. 开发顺序（含 P0.5 垂直切片）
+
+- **M0 骨架**（主 Agent）：sln + csproj（net10.0 + Avalonia 12.1.1 + CommunityToolkit.Mvvm + LiteDB + CsvHelper + Serilog）+ DI + 主题色板 + CI 骨架 + **Directory.Build.props**（任何 Agent 禁改）
+- **P0.5 垂直切片**（主 Agent）：**一条记录链路贯通**——Models(SlateLogItem) + ITakeFlowService(记条/撤回核心时序 B1-B5) + LiteDB 存储 + 单测 + 冒烟 + Fake 集（TestDoubles）+ **生产种子（dummy 两份场表）**。**Gate 0→Gate 1 必备动作：contracts.md 升级至 v0.2 签名级并全量核对**（并行稳定接口 = contract v0.2 §2-§6）
+- **P1 并行**（worktree）：A / E / B / C / D 五分支；**main 冻结**（仅允许 docs 契约提交）；每 Agent 只改自己目录、禁改 docs/根配置；D 无编译依赖可首期开工、**可提前合入**（A 合入后即可）
+- **P2 合并**：A→E→B→(D 任意时点)→C；**P0.5 产物所有权移交**：`SlateLogItem.cs`/`ITakeFlowService.cs`/`LiteDbStore.cs` 及单测合入后演进权归 A/E，主 Agent 不再修改
+- **P3 验证**：dotnet build 0 错误无显著 warning → dotnet test 全绿 → 冒烟（含重启恢复与跨天假时钟（ITimeProvider 注入））
 - **P4 收尾**：Android 目标编译验证 + README + CI
 - **P5 发布**：git + gh 推送
 
@@ -178,16 +191,18 @@ voislate-avalonia/
 | R5 | 导出无日期字段的兼容歧义 | 文件名带日期 + 文档标注 |
 | R6 | B2/B3 原时序缺陷复刻带来的困惑 | 单测锁定 + 已知行为清单 |
 | R7 | 记录页 Tab 缓存导致计划数据陈旧 | 页面激活时刷新计划数据（MessageBus 通知） |
-| R8 | 契约覆盖不全（控件事件签名漂移） | contracts.md 为唯一依据，变更须更新 |
-| R9 | 并行冲突 | worktree + 模块边界 + 契约 |
+| R8 | 契约未达签名级即开工 | **契约 v0.2 为唯一依据；升级为 Gate0→Gate1 必备动作，不足不开工** |
+| R9 | 并行冲突 | worktree + 模块边界 + main 冻结 + 每 Agent 只改自己目录 |
 | R10 | Android 平台能力降级 | 接口 no-op/Mock，Android 增强后续 |
 | R11 | 绑定遗漏导致运行期无响应 | 冒烟清单逐项手测（§9） |
 | R12 | 重置类操作误触 | DialogService 强确认 |
 | R13 | B11 回滚顺序改动引入回归 | ITakeFlowService 单测覆盖撤回全分支 |
+| R14 | P0.5 产物与 A/E 文件重叠（P2 必冲突） | 所有权移交规则（§6 P2）；主 Agent 合入后不再改 |
+| R15 | Scoped VM 生命周期歧义（桌面 MS.DI 无请求作用域） | contracts v0.2 C-6：工厂创建/退出释放/创建时恢复 13 键+文件号（写死） |
 
 ## 8. 契约
 
-见 `docs/contracts.md`（v0.1）：Services 接口签名、VM 成员与命令、控件绑定协议（SlateWheel/SlideConfirmBar/DialFAB/FileCounter/TagChips/Toast/LoadingOverlay）、导航与主题资源键、编译质量基线。
+见 `docs/contracts.md`（**v0.2 签名级**）：Services 接口签名、VM 成员与命令、控件行为协议（SlateWheel/SlideConfirmBar/DialFAB/FileCounter/TagChips/Toast/LoadingOverlay）、导航与主题资源键、测试与编译基线。**并行开发唯一依据；未达签名级不开工。**
 
 ## 9. 验收标准
 
@@ -201,13 +216,14 @@ voislate-avalonia/
 8. **P0.5 垂直切片在五 worktree 前验证通过（Gate 1 前置）**
 9. Android net10.0-android 可编译
 10. GitHub：仓库 + CI 通过 + 完整提交记录
+11. **40 文件归属核对表无未迁移遗留**（含显式不迁移项勾选，§5 表格逐项确认）
 
 ## 10. 阶段门禁（Gate）
 
-- **Gate 0**：五轮 review 全部闭环 → M0
-- **Gate 1**：M0 + **P0.5 垂直切片**（记条链路 build+test+冒烟）→ 开五 worktree
+- **Gate 0**：五轮 review 全部闭环 + contracts v0.2 签名级 → M0
+- **Gate 1**：M0 + **P0.5 垂直切片**（记条链路 build+test+冒烟 + 种子 + TestDoubles）→ 开五 worktree
 - **Gate 2**：各 worktree 模块 build + 单测 → 合并
 - **Gate 3**：合并后全量 build + test + 冒烟（含重启恢复/跨天假时钟）→ 发布
 
 ---
-*（v0.3：闭环 Review 1 的 14 条建议——新增 ITakeFlowService/IPickerHistoryStore、P0.5 垂直切片、B2/B3 时序修正、F1-F4 事实、ADR-008/009、CR1-CR13、存储访问纪律、undo 与索引随动；下一步：Review 第 2 轮——拆分与 Agent 分工审查）*
+*（v0.4：闭环 Review 2——40 文件归属表、FileNumberingService 归 A、IShortcutInputService 删除（音量键归 RecordViewModel）、ITakeFlowService 唯一写入口、Scoped VM 生命周期、契约 v0.2 门禁、P0.5 所有权移交、main 冻结、R14/R15、验收第 11 条；配套 contracts.md v0.2。下一步：Review 第 3 轮——MVVM 最佳实践与映射完整性审查）*
