@@ -1,8 +1,8 @@
-name: ci
+name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
 
 jobs:
@@ -10,19 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: 10.0.x
+
       - name: Restore
         run: dotnet restore VoiSlate.slnx
+
       - name: Build
-        run: dotnet build VoiSlate.slnx --configuration Release --no-restore
+        run: dotnet build VoiSlate.slnx -c Debug --no-restore
+
       - name: Test
-        run: dotnet test VoiSlate.slnx --configuration Release --no-restore --logger "trx;LogFileName=ci.trx"
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: '**/TestResults/*.trx'
-          if-no-files-found: ignore
+        run: dotnet test VoiSlate.slnx -c Debug --no-build
