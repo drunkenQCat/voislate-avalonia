@@ -1,7 +1,7 @@
 # VoiSlate → Avalonia 迁移计划（migration-plan.md）
 
-> 版本：v0.5（已闭环 Review 第 1-3 轮全部意见）｜最后更新：2026-08-20
-> 状态：🔄 五轮 Review 迭代中（已完成 3/5）
+> 版本：v0.6（已闭环 Review 第 1-4 轮全部意见）｜最后更新：2026-08-20
+> 状态：🔄 五轮 Review 迭代中（已完成 4/5）
 
 ---
 
@@ -158,6 +158,8 @@ voislate-avalonia/
 | D | 公共控件与主题（无编译依赖，**可最早合入**） | 契约 v0.2 | Controls + Themes |
 | C | 页面视图与导航 + 4 个记录页漏项 UI（current_file_monitor/current_take_monitor/prev_note_editor/quick_view_log_dialog）+ App.axaml.cs | B,D | Views + App |
 
+**并行事实（Review 4）**：A↔E 为**事实串行对**（E 的 schedule 系服务等 A 合入，A 的 FileNumberingService 等 E 接口桩）；B 半并行（编译级等 A/E 合入，可先行 VM+Fake 单测）；C 最尾（等 B+D，页面先建壳）；D 全程独立可最早完成。
+
 **40 文件归属表（Review 2 逐项核对；seed 归 P0.5）**：
 
 | Agent | 承接文件 |
@@ -173,9 +175,9 @@ voislate-avalonia/
 ## 6. 开发顺序（含 P0.5 垂直切片）
 
 - **M0 骨架**（主 Agent）：sln + csproj（net10.0 + Avalonia 12.1.1 + CommunityToolkit.Mvvm + LiteDB + CsvHelper + Serilog）+ DI + 主题色板 + CI 骨架 + **Directory.Build.props**（任何 Agent 禁改）
-- **P0.5 垂直切片**（主 Agent）：**一条记录链路贯通**——Models(SlateLogItem) + ITakeFlowService(记条/撤回核心时序 B1-B5) + LiteDB 存储 + 单测 + 冒烟 + Fake 集（TestDoubles）+ **生产种子（dummy 两份场表）**。**Gate 0→Gate 1 必备动作：contracts.md 升级至 v0.3 签名级并全量核对**（并行稳定接口 = contract v0.3 §2-§6）
+- **P0.5 垂直切片**（主 Agent）：**一条记录链路贯通**——Models(SlateLogItem) + ITakeFlowService(记条/撤回核心时序 B1-B5，经 ISessionState 不依赖 VM) + LiteDB 存储 + 单测 + 冒烟 + Fake 集（TestDoubles）+ **生产种子（dummy 两份场表）** + **接口桩（ITimeProvider/IFileNamingService）**。**Gate 0→Gate 1 必备动作：contracts.md 升级至 v0.4 签名级并全量核对**（并行稳定接口 = contract v0.4 §2-§6）。**P0.5 移交清单（C-3）**：SlateLogItem/ITakeFlowService/LiteDbStore→A/E；SeedService+种子数据→E；TestDoubles→各所有者（E 拥 Services Fake、A 拥模型 fixture、B 只消费）；App 占位→C；ITimeProvider/IFileNamingService 桩→E
 - **P1 并行**（worktree）：A / E / B / C / D 五分支；**main 冻结**（仅允许 docs 契约提交）；每 Agent 只改自己目录、禁改 docs/根配置；D 无编译依赖可首期开工、**可提前合入**（A 合入后即可）
-- **P2 合并**：A→E→B→(D 任意时点)→C；**P0.5 产物所有权移交**：`SlateLogItem.cs`/`ITakeFlowService.cs`/`LiteDbStore.cs` 及单测合入后演进权归 A/E，主 Agent 不再修改
+- **P2 合并**：A→E→B→(D 任意时点)→C；**P0.5 产物所有权移交**：`SlateLogItem.cs`/`ITakeFlowService.cs`/`LiteDbStore.cs` 及单测合入后演进权归 A/E，主 Agent 不再修改；**App.axaml.cs 交接**：DI 注册块标记 `// DI-REGISTRATION (C keep)`，C 覆盖时全量保留（C-5）；**VM 构造变更纪律**：B 改 VM ctor 先 bump 契约，C 同步注册（C-5）
 - **P3 验证**：dotnet build 0 错误无显著 warning → dotnet test 全绿 → 冒烟（含重启恢复与跨天假时钟（ITimeProvider 注入））
 - **P4 收尾**：Android 目标编译验证 + README + CI
 - **P5 发布**：git + gh 推送
@@ -202,7 +204,7 @@ voislate-avalonia/
 
 ## 8. 契约
 
-见 `docs/contracts.md`（**v0.3 签名级**）：Services 接口签名、VM 成员与命令、控件行为协议（SlateWheel/SlideConfirmBar/DialFAB/FileCounter/TagChips/Toast/LoadingOverlay）、导航与主题资源键、测试与编译基线。**并行开发唯一依据；未达签名级不开工。**
+见 `docs/contracts.md`（**v0.4 签名级**）：Services 接口签名、VM 成员与命令、控件行为协议（SlateWheel/SlideConfirmBar/DialFAB/FileCounter/TagChips/Toast/LoadingOverlay）、导航与主题资源键、测试与编译基线。**并行开发唯一依据；未达签名级不开工。**
 
 ## 9. 验收标准
 
@@ -220,10 +222,10 @@ voislate-avalonia/
 
 ## 10. 阶段门禁（Gate）
 
-- **Gate 0**：五轮 review 全部闭环 + contracts v0.3 签名级 → M0
+- **Gate 0**：五轮 review 全部闭环 + contracts v0.4 签名级 → M0
 - **Gate 1**：M0 + **P0.5 垂直切片**（记条链路 build+test+冒烟 + 种子 + TestDoubles）→ 开五 worktree
 - **Gate 2**：各 worktree 模块 build + 单测 → 合并
 - **Gate 3**：合并后全量 build + test + 冒烟（含重启恢复/跨天假时钟）→ 发布
 
 ---
-*（v0.5：闭环 Review 3——JSON 枚举 CamelCase 修正（A#16）、ITakeFlowService 编辑唯一入口（B1）、DialFAB 枚举转换归 C（B2）、CurrentPage=VM+DataTemplate 映射（B3）、SlideConfirmBar 幂等补提交（B4）、Activate/Deactivate 激活钩子（B5）；配套 contracts.md v0.3。下一步：Review 第 4 轮——并行开发实操性审查）*
+*（v0.6：闭环 Review 4——ISessionState 解耦 Service→VM 逆向依赖（C-1）、FileNumberingService 唯一实例身份（C-2）、P0.5 移交清单补全种子/TestDoubles/App 占位/接口桩（C-3）、TestDoubles 随接口所有者（C-4）、App 注册交接协议与 VM ctor 变更纪律（C-5）、A↔E 事实串行对说明；配套 contracts.md v0.4。下一步：Review 第 5 轮——最终审核（可执行性/遗漏/验收））*
