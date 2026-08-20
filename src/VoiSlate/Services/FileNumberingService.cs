@@ -3,9 +3,13 @@ using VoiSlate.Models;
 namespace VoiSlate.Services;
 
 /// <summary>
-/// 文件号服务（对齐原版 RecordFileNum + C-2：唯一实例由 ITakeFlowService 持用，DI 单例）。
-/// 行为：number 从 1 起；decrement 不低于 1（为 1 时不发事件）；prefix 按模式计算；
-/// prevFileName 在 number==1 时返回空串（原版守卫依赖此语义）。
+/// 文件号服务（A 演进版：逐行核对原版 models/recorder_file_num.dart 后确认行为一一对应——
+/// number 从 1 起；setValue/increment 均发事件；decrement 下限 1 且不发事件；
+/// fullName/prevFileName 补零 3 位；today=yyMMdd、soundDevicesToday=yyYMMdd；
+/// prefix 优先级 custom → sound devices → default）。
+/// 契约 §2：prefix 模式以 <see cref="RecorderType"/> 表达（见 <see cref="RecorderType"/> 属性；
+/// <see cref="PrefixMode"/> 为 P0.5 兼容别名，E 演进 ITakeFlowService 后移除）。
+/// + C-2：唯一实例由 ITakeFlowService 持用，DI 单例；prevFileName 在 number==1 时返回空串（原版守卫依赖此语义）。
 /// </summary>
 public interface IFileNamingService
 {
@@ -59,7 +63,21 @@ public sealed class FileNumberingService : IFileNamingService
 
     public string Linker { get; set; } = "-T";
 
+    /// <summary>
+    /// P0.5 兼容前缀模式（非契约成员；E 的 ITakeFlowService.SetPrefixAsync 当前依赖此属性）。
+    /// 契约收敛后统一为 <see cref="RecorderType"/>（见 <see cref="RecorderType"/> 属性）。
+    /// </summary>
     public PrefixType PrefixMode { get; set; } = PrefixType.Default;
+
+    /// <summary>
+    /// 契约 §2 前缀模式（按 RecorderType+ITimeProvider 计算 Prefix）。
+    /// 与 <see cref="PrefixMode"/> 同一状态的双向映射，无独立存储，读写不会漂移。
+    /// </summary>
+    public RecorderType RecorderType
+    {
+        get => PrefixMode.ToRecorderType();
+        set => PrefixMode = value.ToPrefixType();
+    }
 
     public string CustomPrefix { get; set; } = "custom";
 
