@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VoiSlate/VoiSlate.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VoiSlate.Tests/VoiSlate.Tests.csproj" />
+  </Folder>
+</Solution>

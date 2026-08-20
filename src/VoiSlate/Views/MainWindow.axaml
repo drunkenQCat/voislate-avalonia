@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:VoiSlate.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        x:Class="VoiSlate.Views.MainWindow"
+        x:DataType="vm:PlaceholderViewModel"
+        Title="VoiSlate"
+        Width="1280" Height="800"
+        WindowStartupLocation="CenterScreen">
+
+  <!-- M0 占位：主窗口壳。左侧导航 + ContentControl（↔ MainViewModel.CurrentPage）由 Agent C 实现。 -->
+  <Grid RowDefinitions="Auto,*">
+    <TextBlock Grid.Row="0" Text="VoiSlate — M0 skeleton (Agent C owns this window)"
+               Margin="16,12" FontSize="16" />
+    <TextBlock Grid.Row="1" Margin="16" VerticalAlignment="Center"
+               Text="{Binding PlaceholderText}" />
+  </Grid>
+
+</Window>

@@ -1,0 +1,16 @@
+<Project>
+
+  <!--
+    VoiSlate 共享构建配置（M0 提供，任何 Agent 禁改 — 契约 v0.5 §7）
+    Directory.Build.props 会被子目录所有 csproj 自动继承（SDK glob 免改 csproj）。
+  -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,16 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="VoiSlate.App"
+             RequestedThemeVariant="Default">
+
+  <!--
+    M0 占位（契约 v0.5：App.axaml / App.axaml.cs 所有权归 Agent C）。
+    C 接管时保留：本注释段、DI-REGISTRATION 区域、以及后续 VoiSlatePalette 合并。
+  -->
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+
+  <!-- M0 占位：主题资源键（VoiSlatePalette.axaml）将由 Agent D 产出并在此合并 -->
+
+</Application>
