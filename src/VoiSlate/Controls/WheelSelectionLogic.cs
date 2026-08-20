@@ -105,7 +105,8 @@ public static class WheelSelectionLogic
 
     /// <summary>
     /// 手势拖动中的连续吸附：对连续浮点位置取最近整项（拖动中 SelectedIndex 连续更新用）。
-    /// 循环模式下先收敛再四舍五入。
+    /// 循环模式下：正侧按最近中心四舍五入回卷；负侧（拖过顶缘进入 count-1 项区域）按地板回卷，
+    /// 保证 -0.4 → count-1（视觉连续），5.x 复制位收敛（如 5.1 → 0）。
     /// </summary>
     public static int SnapToNearest(double position, int count, bool isLoop)
     {
@@ -116,13 +117,12 @@ public static class WheelSelectionLogic
 
         if (isLoop)
         {
-            var wrapped = position % count;
-            if (wrapped < 0)
+            if (position < 0)
             {
-                wrapped += count;
+                return ((int)Math.Floor(position) % count + count) % count;
             }
 
-            return (int)Math.Round(wrapped) % count;
+            return (int)Math.Round(position) % count;
         }
 
         return (int)Math.Round(Math.Clamp(position, 0, count - 1));
@@ -130,7 +130,8 @@ public static class WheelSelectionLogic
 
     /// <summary>
     /// 计算连续浮点位置（非循环视图坐标，可能越界/循环越界）对应的"显示索引"：
-    /// 非循环：直接收敛；循环：取最近等价副本（保证拖过边界时视觉连续）。
+    /// 非循环：直接收敛；循环：正侧取最近等价副本，负侧地板回卷（拖过顶缘时索引从 count-1 平滑进入），
+    /// 保证拖过边界时视觉连续。
     /// </summary>
     public static int DisplayIndex(double position, int count, bool isLoop)
     {
@@ -144,14 +145,11 @@ public static class WheelSelectionLogic
             return (int)Math.Round(Math.Clamp(position, 0, count - 1));
         }
 
-        // 循环：位置可能等于 0*count 之外；取模后以 0.5 为界四舍五入，
-        // 保证索引从 count-1 平滑过渡到 0。
-        var wrapped = position % count;
-        if (wrapped < 0)
+        if (position < 0)
         {
-            wrapped += count;
+            return ((int)Math.Floor(position) % count + count) % count;
         }
 
-        return (int)Math.Round(wrapped) % count;
+        return (int)Math.Round(position) % count;
     }
 }
