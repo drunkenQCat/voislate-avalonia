@@ -4,7 +4,7 @@
 
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="clr-namespace:VoiSlate.Controls;assembly=VoiSlate">
+        xmlns:controls="urn:voislate:controls">
 
   <!-- ============ SlideConfirmBar（滑动确认条） ============ -->
 
