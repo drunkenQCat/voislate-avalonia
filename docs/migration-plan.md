@@ -1,7 +1,7 @@
 # VoiSlate → Avalonia 迁移计划（migration-plan.md）
 
-> 版本：v0.8（五轮 Review 已闭环；P0.5 垂直切片交付 Gate 1；P1 并行开发进行中）｜最后更新：2026-08-20
-> 状态：✅ Gate 0（五轮 review + contracts v0.5）→ ✅ Gate 1（P0.5 垂直切片：build 0w/0e、33/33 测试、应用启动+种子入库、commit cfc1b14）→ 🔄 P1 五 worktree 并行（agent-a..e @ cfc1b14）
+> 版本：v0.9（P2 合并进行中：A/E 已合入）｜最后更新：2026-08-20
+> 状态：✅ Gate 0（五轮 review + contracts v0.5）→ ✅ Gate 1（P0.5 垂直切片：build 0w/0e、33/33 测试、应用启动+种子入库、commit cfc1b14）→ 🔄 P2 合并中（A d50c946 ✅ / E 418b563 ✅ / D / B / C 待合入）
 
 ---
 
@@ -228,4 +228,5 @@ voislate-avalonia/
 - **Gate 3**：合并后全量 build + test + 冒烟（含重启恢复/跨天假时钟）→ 发布
 
 ---
+*（v0.8：**P0.5 垂直切片交付（Gate 1 → cfc1b14）**——Models/Services 全链路 + LiteDB 三仓储 + 种子 + 启动时序 + TestDoubles；build 0w/0e、33/33 测试、应用真实启动入库。P1 五 worktree 并行：**已合入 main：A（d50c946，RecorderType+FileNumberingService 逐行核对+32 测试，65/65）、E（418b563，11 个契约 §3 服务 + CSV/日切/导出导入/备份/计划簿/录音/硬件键 + 53 测试，118/118）**。合并决策留痕：① B 与 E 同名接口（IExportService/IHardwareKeyService；B 桩 vs E 实现）→ 保留 E，删 B 桩，按 E 契约签名对齐 B 的 VM 调用点；② C 占位控件 vs D 真实控件 → 保留 D（契约 §5 签名逐项预审一致），删 C 占位；③ C 合并时落地 E 的 DI 接线清单（8 注册 + OnStartup/StartPeriodicCheck/StartPeriodicBackup 启动序 + 退出 BackupAsync→Dispose + project=\"NewProject\" 缺省初始化）；④ 后续契约 bump 项：PrefixType→RecorderType 收敛、LiteDbScheduleBook 字符序/缓存、ILogRepository 日期注册 API、ISessionSettingsStore 同步签名。*）
 *（v0.7：**五轮 Review 全部闭环**——Review 1 架构/遗漏/风险、Review 2 拆分与分工、Review 3 MVVM 与映射、Review 4 并行实操、Review 5 最终审核（BLOCKER-1 文件号写路径闭环 + N1-N4 备忘）。配套 contracts.md v0.5 最终签名版。Gate 0 达成，下一阶段：M0 骨架 → P0.5 垂直切片 → P1 五 worktree 并行。*）*
