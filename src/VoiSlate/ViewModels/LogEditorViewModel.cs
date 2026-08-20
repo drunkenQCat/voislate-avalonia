@@ -61,6 +61,9 @@ public partial class LogEditorViewModel : ObservableObject
 
     public string FilenameLinker { get; }
 
+    /// <summary>文件名显示（prefix+linker+D3，对齐 SlateLogItem.FileName；C 的编辑器头部绑定）。</summary>
+    public string FileName => FilenamePrefix + FilenameLinker + FilenameNum.ToString("D3");
+
     /// <summary>可用文件号（1..500 减已用，当前号置顶）。</summary>
     public IReadOnlyList<int> AvailableFileNumbers { get; }
 
@@ -90,6 +93,12 @@ public partial class LogEditorViewModel : ObservableObject
 
     /// <summary>轨道标签（TagChips 增删改）。</summary>
     public ObservableCollection<string> TrackTags { get; } = [];
+
+    /// <summary>声音评价选项（ComboBox 数据源）。</summary>
+    public IReadOnlyList<TkStatus> TkStatuses { get; } = Enum.GetValues<TkStatus>();
+
+    /// <summary>画面评价选项（ComboBox 数据源）。</summary>
+    public IReadOnlyList<ShtStatus> ShtStatuses { get; } = Enum.GetValues<ShtStatus>();
 
     public void AddTag(string tag)
     {

@@ -17,7 +17,19 @@
 
   <Application.Styles>
     <FluentTheme />
+    <!-- Agent D：自定义控件的默认样式/模板（StyleInclude 加载 selective Styles） -->
+    <StyleInclude Source="avares://VoiSlate/Themes/Controls.axaml" />
   </Application.Styles>
+
+  <Application.Resources>
+    <!-- Agent D：主题色板资源键（VoiSlatePalette.axaml；键名契约 §6 逐字一致）。
+         Avalonia 12 已移除 ResourceDictionary.Source——改用 ResourceInclude（编译期合并版 MergeResourceInclude）。 -->
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <MergeResourceInclude Source="avares://VoiSlate/Themes/VoiSlatePalette.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
 
   <Application.DataTemplates>
     <DataTemplate DataType="{x:Type vm:RecordViewModel}">

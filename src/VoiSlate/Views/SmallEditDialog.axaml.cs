@@ -13,7 +13,13 @@ public partial class SmallEditDialog : Window
     private readonly bool _useChoices;
     private (bool Ok, string Value) _result;
 
-    private SmallEditDialog(string title, string label, string initial, IReadOnlyList<string>? choices)
+    /// <summary>Runtime-loader 可达性（AVLN3001 消音）；正常入口为 ShowAsync。</summary>
+    public SmallEditDialog()
+    {
+        InitializeComponent();
+    }
+
+    public SmallEditDialog(string title, string label, string initial, IReadOnlyList<string>? choices)
     {
         InitializeComponent();
         Title = title;

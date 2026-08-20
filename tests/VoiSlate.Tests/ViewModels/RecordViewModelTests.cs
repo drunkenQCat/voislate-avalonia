@@ -42,7 +42,7 @@ public class RecordViewModelTests
         await flow.InitializeAsync(CancellationToken.None);
 
         var keys = new TestHardwareKeyService();
-        var vm = new RecordViewModel(settings, flow, new MockAsrService(), keys, session, time);
+        var vm = new RecordViewModel(settings, flow, new MockAsrService(), keys, session, time, logs);
         return new Fixture(vm, session, settings, logs, history, flow, keys);
     }
 

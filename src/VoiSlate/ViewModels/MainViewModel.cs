@@ -41,7 +41,7 @@ public partial class MainViewModel : ObservableObject
     public MainViewModel(
         Func<RecordViewModel> recordPageFactory,
         ScheduleViewModel schedulePage,
-        SlateLogPageViewModel slateLogPage,
+        SlateLogViewModel slateLogPage,
         SettingsViewModel settingsPage)
     {
         Pages =
@@ -55,6 +55,7 @@ public partial class MainViewModel : ObservableObject
 
         // 原版启动即记录页（TabBarView 初始记录页）
         CurrentPage = Resolve(RecordPageKey);
+        CurrentPageKey = RecordPageKey;
     }
 
     public IReadOnlyList<MainPageDescriptor> Pages { get; }
@@ -62,6 +63,10 @@ public partial class MainViewModel : ObservableObject
     /// <summary>当前页 VM 实例（ContentControl.Content；VM→View 经 DataTemplate）。</summary>
     [ObservableProperty]
     private object? _currentPage;
+
+    /// <summary>当前页导航键（C 的左侧导航高亮 PageKeyToBrushConverter 消费）。</summary>
+    [ObservableProperty]
+    private string _currentPageKey = string.Empty;
 
     [RelayCommand]
     private void Navigate(string? key)
@@ -72,6 +77,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         CurrentPage = page.Factory is null ? page.Instance : page.Factory();
+        CurrentPageKey = key;
     }
 
     private object Resolve(string key) => _byKey[key].Resolve();

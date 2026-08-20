@@ -32,6 +32,7 @@ public partial class App : Application
             var ct = CancellationToken.None;
             using var scope = _services.CreateScope();
             _services.GetRequiredService<ISeedService>().EnsureSeededAsync(ct).GetAwaiter().GetResult();
+            _services.GetRequiredService<RecordingSessionViewModel>().Initialization.GetAwaiter().GetResult();
             _services.GetRequiredService<ITakeFlowService>().InitializeAsync(ct).GetAwaiter().GetResult();
         }
         catch (Exception ex)
@@ -69,7 +70,10 @@ public partial class App : Application
             var fn = new FileNumberingService(sp.GetRequiredService<ITimeProvider>());
             return fn;
         });
-        services.AddSingleton<ISessionState, SessionStateImpl>();
+        services.AddSingleton(sp => new RecordingSessionViewModel(
+            sp.GetRequiredService<ISessionSettingsStore>(),
+            sp.GetRequiredService<ITimeProvider>()));
+        services.AddSingleton<ISessionState>(sp => sp.GetRequiredService<RecordingSessionViewModel>());
         services.AddSingleton<ISessionSettingsStore, LiteDbSessionSettingsStore>();
         services.AddSingleton<ILogRepository, LiteDbLogRepository>();
         services.AddSingleton<IPickerHistoryStore, LiteDbPickerHistoryStore>();
@@ -96,40 +100,44 @@ public partial class App : Application
             return svc;
         });
 
-        // ==== Agent C stub 注册（ViewModels/Stubs/ —— B 合入后删除 Stubs 目录并替换为 B 的正式注册；C-5 纪律：不触碰上方既存注册块） ====
-        // RecordingSessionViewModel：契约 §4（DI 单例，实现 ISessionState）。
-        // 注意：P0.5 的 ISessionState 仍指向 SessionStateImpl（上方既存注册块）；B 合入后由 B 将
-        // ISessionState 指向 RecordingSessionViewModel（届时删除 SessionStateImpl）。
-        services.AddSingleton<RecordingSessionViewModel>();
+        // ==== 集成接线（C 合入后按 B 真实 VM 构造器重写；新增缺补服务生产实现）====
+        services.AddSingleton<IHardwareKeyService, NoopHardwareKeyService>();
+        services.AddSingleton<IExportService, ExportService>();
+        services.AddSingleton<IScheduleStore, NoopScheduleStore>();
+        services.AddSingleton<ICsvScheduleParser, CsvScheduleParserService>();
 
         // RecordViewModel：Scoped 生命周期（契约 C-6：进入创建 / 退出释放）——经工厂按页创建。
         services.AddSingleton<Func<RecordViewModel>>(sp => () => new RecordViewModel(
             sp.GetRequiredService<ISessionSettingsStore>(),
             sp.GetRequiredService<ITakeFlowService>(),
-            sp.GetRequiredService<IScheduleBook>(),
-            sp.GetRequiredService<RecordingSessionViewModel>(),
             sp.GetRequiredService<IAsrService>(),
+            sp.GetRequiredService<IHardwareKeyService>(),
+            sp.GetRequiredService<RecordingSessionViewModel>(),
+            sp.GetRequiredService<ITimeProvider>(),
             sp.GetRequiredService<ILogRepository>()));
 
-        // 其余页 VM：单例（stub 简化；B 决定最终生命周期）。
+        // 场记页：扁平列表 VM（C 的 SlateLogView 数据面；MainViewModel 导航该实例）。
         services.AddSingleton<SlateLogViewModel>(sp => new SlateLogViewModel(
-            sp.GetRequiredService<ILogRepository>(),
             sp.GetRequiredService<ITakeFlowService>(),
+            sp.GetRequiredService<ILogRepository>(),
             sp.GetRequiredService<ITimeProvider>(),
-            sp.GetRequiredService<IToastService>()));
+            sp.GetRequiredService<IExportService>()));
+
         services.AddSingleton<ScheduleViewModel>(sp => new ScheduleViewModel(
-            sp.GetRequiredService<IScheduleBook>(),
-            sp.GetRequiredService<IToastService>()));
+            sp.GetRequiredService<IScheduleStore>(),
+            sp.GetRequiredService<ICsvScheduleParser>(),
+            sp.GetRequiredService<RecordingSessionViewModel>()));
+
         services.AddSingleton<SettingsViewModel>(sp => new SettingsViewModel(
             sp.GetRequiredService<ISessionSettingsStore>(),
-            sp.GetRequiredService<ITakeFlowService>(),
             sp.GetRequiredService<ILogRepository>(),
-            sp.GetRequiredService<IAsrService>(),
+            sp.GetRequiredService<ITakeFlowService>(),
+            sp.GetRequiredService<IExportService>(),
             sp.GetRequiredService<ITimeProvider>(),
-            sp.GetRequiredService<IToastService>()));
+            sp.GetRequiredService<RecordingSessionViewModel>()));
+
         services.AddSingleton<MainViewModel>(sp => new MainViewModel(
             sp.GetRequiredService<Func<RecordViewModel>>(),
-            sp.GetRequiredService<RecordingSessionViewModel>(),
             sp.GetRequiredService<ScheduleViewModel>(),
             sp.GetRequiredService<SlateLogViewModel>(),
             sp.GetRequiredService<SettingsViewModel>()));

@@ -29,14 +29,14 @@ public class MainViewModelTests
         var created = new List<RecordViewModel>();
         RecordViewModel Factory()
         {
-            var vm = new RecordViewModel(settings, flow, new MockAsrService(), keys, session, time);
+            var vm = new RecordViewModel(settings, flow, new MockAsrService(), keys, session, time, logs);
             created.Add(vm);
             return vm;
         }
 
         var schedule = new ScheduleViewModel(new StubScheduleStore(), new StubCsvScheduleParser(), session);
-        var slateLog = new SlateLogPageViewModel(logs, new SpyExportService(), flow, session, book, time);
-        var settingsVm = new SettingsViewModel(settings, logs, flow, new SpyExportService(), time);
+        var slateLog = new SlateLogViewModel(flow, logs, time, new SpyExportService());
+        var settingsVm = new SettingsViewModel(settings, logs, flow, new SpyExportService(), time, session);
         settingsVm.Initialization.GetAwaiter().GetResult();
 
         var main = new MainViewModel(Factory, schedule, slateLog, settingsVm);

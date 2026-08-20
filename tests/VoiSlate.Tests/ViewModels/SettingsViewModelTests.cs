@@ -38,7 +38,7 @@ public class SettingsViewModelTests
         await flow.InitializeAsync(CancellationToken.None);
 
         var exporter = new SpyExportService();
-        var vm = new SettingsViewModel(settings, logs, flow, exporter, time);
+        var vm = new SettingsViewModel(settings, logs, flow, exporter, time, session);
         await vm.Initialization;
         return new Harness(vm, settings, logs, flow, exporter);
     }

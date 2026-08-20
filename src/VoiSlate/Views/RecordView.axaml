@@ -39,9 +39,9 @@
           <StackPanel Spacing="4">
             <TextBlock Text="当前文件号（B7：与记录计数同步，编辑走 ITakeFlowService）" FontSize="13" Foreground="#666666" />
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="{Binding CurrentFilePrefix}" FontSize="24" FontWeight="Bold" />
-              <TextBlock Text="{Binding CurrentFileLinker}" FontSize="24" Foreground="#888888" />
-              <TextBlock Text="{Binding CurrentFileNumberText}" FontSize="24" FontWeight="Bold" Foreground="#0067A0" />
+              <TextBlock Text="{Binding PrefixText}" FontSize="24" FontWeight="Bold" />
+              <TextBlock Text="{Binding LinkerText}" FontSize="24" Foreground="#888888" />
+              <TextBlock Text="{Binding NumberText}" FontSize="24" FontWeight="Bold" Foreground="#0067A0" />
             </StackPanel>
             <TextBlock Text="补录模式：已联动（Take 号 = 文件号）" FontSize="12" Foreground="#2E7D32" IsVisible="{Binding IsLinked}" />
             <TextBlock Text="补录模式：补录中（Take 号与文件号解绑 → Wild 条）" FontSize="12" Foreground="#C62828" IsVisible="{Binding !IsLinked}" />
@@ -74,9 +74,9 @@
       <!-- 文件号卡片 + 补录联动（FileCounter；EditRequested → 视图对话框 → ITakeFlowService） -->
       <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
         <controls:FileCounter x:Name="FileCounterCtl"
-                              Prefix="{Binding CurrentFilePrefix, Mode=TwoWay}"
-                              Linker="{Binding CurrentFileLinker, Mode=TwoWay}"
-                              NumberText="{Binding CurrentFileNumberText, Mode=TwoWay}" />
+                              Prefix="{Binding PrefixText, Mode=TwoWay}"
+                              Linker="{Binding LinkerText, Mode=TwoWay}"
+                              NumberText="{Binding NumberText, Mode=TwoWay}" />
         <Button Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0" Padding="14,10"
                 Command="{Binding ToggleLinkCommand}">
           <StackPanel Orientation="Horizontal" Spacing="6">

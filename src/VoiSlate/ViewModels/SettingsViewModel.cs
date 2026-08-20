@@ -22,6 +22,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly ITakeFlowService _takeFlow;
     private readonly IExportService _exporter;
     private readonly ITimeProvider _time;
+    private readonly RecordingSessionViewModel _session;
 
     /// <summary>初始化加载任务（存储同步外表，通常构造内即完成）。</summary>
     public Task Initialization { get; }
@@ -31,13 +32,16 @@ public partial class SettingsViewModel : ObservableObject
         ILogRepository logs,
         ITakeFlowService takeFlow,
         IExportService exporter,
-        ITimeProvider time)
+        ITimeProvider time,
+        RecordingSessionViewModel session)
     {
         _settings = settings;
         _logs = logs;
         _takeFlow = takeFlow;
         _exporter = exporter;
         _time = time;
+        _session = session;
+        _session.PropertyChanged += OnSessionPropertyChanged;
         Initialization = InitializeAsync();
     }
 
@@ -48,10 +52,74 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private int _todayCount;
 
+    /// <summary>链接符（文本框缓冲；保存经 ITakeFlowService.SetLinkerAsync 唯一写入口 B1）。</summary>
+    [ObservableProperty]
+    private string _recordLinker = string.Empty;
+
+    /// <summary>前缀模式显示串（三模式 B6）。</summary>
+    [ObservableProperty]
+    private string _prefixMode = DefaultPrefixMode;
+
+    /// <summary>自定义前缀文本（custom 模式生效）。</summary>
+    [ObservableProperty]
+    private string _customPrefix = "custom";
+
+    /// <summary>自定义前缀输入是否可用（PrefixMode=="自定义"）。</summary>
+    [ObservableProperty]
+    private bool _isCustomPrefixEnabled;
+
+    /// <summary>补录联动（直连会话单例，单一事实来源；保存即写 SessionKeys）。</summary>
+    public bool IsLinked
+    {
+        get => _session.IsLinked;
+        set => _session.SetLink(value);
+    }
+
+    private const string DefaultPrefixMode = "默认（日期 yymmdd）";
+    private const string SoundDevicesPrefixMode = "声音设备（yyYmMd）";
+    private const string CustomPrefixMode = "自定义";
+
+    /// <summary>前缀模式下拉选项（三模式 B6；显示串 ↔ SessionKeys.PrefixType）。</summary>
+    public IReadOnlyList<string> PrefixModes { get; } =
+        [DefaultPrefixMode, SoundDevicesPrefixMode, CustomPrefixMode];
+
+    private static string PrefixModeOf(string settingsValue) => settingsValue switch
+    {
+        "sound devices" => SoundDevicesPrefixMode,
+        "custom" => CustomPrefixMode,
+        _ => DefaultPrefixMode,
+    };
+
     private async Task InitializeAsync()
     {
         ProjectName = await _settings.GetStringAsync(ProjectKey, string.Empty);
+        RecordLinker = _session.RecordLinker;
+        CustomPrefix = _session.CustomPrefix;
+        PrefixMode = PrefixModeOf(_session.PrefixType);
+        IsCustomPrefixEnabled = PrefixMode == CustomPrefixMode;
         await LoadAsync();
+    }
+
+    partial void OnPrefixModeChanged(string value) => IsCustomPrefixEnabled = value == CustomPrefixMode;
+
+    private void OnSessionPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(RecordingSessionViewModel.IsLinked):
+                OnPropertyChanged(nameof(IsLinked));
+                break;
+            case nameof(RecordingSessionViewModel.RecordLinker):
+                if (RecordLinker != _session.RecordLinker)
+                {
+                    RecordLinker = _session.RecordLinker;
+                }
+
+                break;
+            case nameof(RecordingSessionViewModel.PrefixType):
+                PrefixMode = PrefixModeOf(_session.PrefixType);
+                break;
+        }
     }
 
     /// <summary>刷新今日计数（C 于设置页激活时调用）。</summary>
@@ -91,4 +159,40 @@ public partial class SettingsViewModel : ObservableObject
         var json = _exporter.SerializeLogs(all);
         await _exporter.SaveToFileAsync(string.Empty, "all.json", json); // 文件名带日期由 E 落盘时补充
     }
+
+    /// <summary>显式保存工程名（OnProjectNameChanged 已即时持久化；本命令为兜底确认）。</summary>
+    [RelayCommand]
+    private void SaveProject()
+    {
+        if (!string.IsNullOrWhiteSpace(ProjectName))
+        {
+            _ = _settings.SetAsync(ProjectKey, ProjectName);
+        }
+    }
+
+    /// <summary>保存链接符（唯一写入口 ITakeFlowService；会话/记录页实时联动）。</summary>
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    private async Task SaveLinker()
+    {
+        await _takeFlow.SetLinkerAsync(RecordLinker, CancellationToken.None);
+        _session.SetRecordLinker(RecordLinker);
+    }
+
+    /// <summary>保存前缀模式（唯一写入口 ITakeFlowService；custom 模式同时持久化自定义文本）。</summary>
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    private async Task SavePrefix()
+    {
+        var mode = PrefixMode switch
+        {
+            SoundDevicesPrefixMode => PrefixType.SoundDevices,
+            CustomPrefixMode => PrefixType.Custom,
+            _ => PrefixType.Default,
+        };
+        await _takeFlow.SetPrefixAsync(mode, CustomPrefix, CancellationToken.None);
+        _session.SetPrefixType(mode.ToSettingsValue());
+        _session.SetCustomPrefix(CustomPrefix);
+    }
+
+    /// <summary>清理订阅（App 收尾）。</summary>
+    public void Dispose() => _session.PropertyChanged -= OnSessionPropertyChanged;
 }

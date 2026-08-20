@@ -1,29 +1,35 @@
 using Avalonia.Controls;
-using VoiSlate.Models;
-using VoiSlate.Services;
 using VoiSlate.ViewModels;
 
 namespace VoiSlate.Views;
 
 /// <summary>
-/// Agent C：场记编辑对话框（契约 §6 LogEditorWindow；数据经 LogEditorViewModel —— B 的 stub）。
-/// DataContext 注入 LogEditorViewModel；保存/删除经 ITakeFlowService。
+/// Agent C：场记编辑对话框（契约 §6 LogEditorWindow；数据经 LogEditorViewModel —— B 正式实现）。
+/// 保存/删除经 ITakeFlowService（唯一写入口 B1）；Saved/Deleted 置位即关闭。
 /// </summary>
 public partial class LogEditorWindow : Window
 {
-    private LogEditorWindow()
+    public LogEditorWindow()
     {
         InitializeComponent();
     }
 
-    public static Task ShowDialogAsync(Window owner, SlateLogItem item, int index, ITakeFlowService flow)
+    public static Task ShowDialogAsync(Window owner, LogEditorViewModel vm)
     {
-        var vm = new LogEditorViewModel(item, index, flow);
         var window = new LogEditorWindow
         {
             DataContext = vm,
         };
-        vm.CloseRequested += () => window.Close();
+        System.ComponentModel.PropertyChangedEventHandler closer = null!;
+        closer = (_, e) =>
+        {
+            if (e.PropertyName is nameof(LogEditorViewModel.Saved) or nameof(LogEditorViewModel.Deleted))
+            {
+                vm.PropertyChanged -= closer;
+                window.Close();
+            }
+        };
+        vm.PropertyChanged += closer;
         return window.ShowDialog(owner);
     }
 }

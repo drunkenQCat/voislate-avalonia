@@ -27,6 +27,11 @@ public partial class ScheduleViewModel : ObservableObject
         _store = store;
         _parser = parser;
         _session = session;
+        AddSceneCommand = new RelayCommand(() => AddScene());
+        AddShotCommand = new RelayCommand(() => AddShot());
+        DeleteItemCommand = new RelayCommand<string?>(DeleteByKind);
+        EditItemCommand = new RelayCommand<string?>(_ => { });
+        MoveItemCommand = new RelayCommand<string?>(MoveByKind);
         _session.PropertyChanged += OnSessionPropertyChanged;
     }
 
@@ -42,10 +47,60 @@ public partial class ScheduleViewModel : ObservableObject
 
     public bool HasScenes => Scenes.Count > 0;
 
+    /// <summary>当前场（视图底部备注卡绑定）。</summary>
+    public SceneSchedule? SelectedScene =>
+        SelectedSceneIndex >= 0 && SelectedSceneIndex < Scenes.Count ? Scenes[SelectedSceneIndex] : null;
+
+    /// <summary>当前场的镜列表（右列 ItemsSource）。</summary>
+    public IReadOnlyList<ScheduleItem> SelectedSceneShots => SelectedScene?.Items ?? [];
+
+    // ---- 视图命令（C 的 ScheduleView 绑定面；逻辑方法为 B 既有实现）----
+
+    /// <summary>场次＋（命令壳）。</summary>
+    public IRelayCommand AddSceneCommand { get; }
+
+    /// <summary>镜头＋（命令壳）。</summary>
+    public IRelayCommand AddShotCommand { get; }
+
+    /// <summary>删除场/镜（CommandParameter: "scene"/"shot"）。</summary>
+    public IRelayCommand<string?> DeleteItemCommand { get; }
+
+    /// <summary>编辑镜（视图经 SmallEditDialog 编辑备注后调 ApplyShotEdit；此处为宿主）。</summary>
+    public IRelayCommand<string?> EditItemCommand { get; }
+
+    /// <summary>下移场/镜（CommandParameter: "scene"/"shot"）。</summary>
+    public IRelayCommand<string?> MoveItemCommand { get; }
+
+    private void DeleteByKind(string? kind)
+    {
+        if (kind == "scene")
+        {
+            DeleteScene(SelectedSceneIndex, out _);
+        }
+        else if (kind == "shot")
+        {
+            DeleteShot(SelectedShotIndex, out _);
+        }
+    }
+
+    private void MoveByKind(string? kind)
+    {
+        if (kind == "scene")
+        {
+            MoveScene(SelectedSceneIndex, SelectedSceneIndex + 1);
+        }
+        else if (kind == "shot")
+        {
+            MoveShot(SelectedShotIndex, SelectedShotIndex + 1);
+        }
+    }
+
     // ---- 选择联动（本 VM ↔ RecordingSessionViewModel 双向）----
 
     partial void OnSelectedSceneIndexChanged(int value)
     {
+        OnPropertyChanged(nameof(SelectedScene));
+        OnPropertyChanged(nameof(SelectedSceneShots));
         if (_syncingSelection)
         {
             return;

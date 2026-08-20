@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -31,6 +32,7 @@ public partial class RecordViewModel : ObservableObject, IDisposable
     private readonly IHardwareKeyService _hardwareKeys;
     private readonly RecordingSessionViewModel _session;
     private readonly ITimeProvider _time;
+    private readonly ILogRepository _logs;
 
     private bool _isActive;
     private bool _suppressColumnSync;
@@ -43,7 +45,8 @@ public partial class RecordViewModel : ObservableObject, IDisposable
         IAsrService asr,
         IHardwareKeyService hardwareKeys,
         RecordingSessionViewModel session,
-        ITimeProvider time)
+        ITimeProvider time,
+        ILogRepository logs)
     {
         _settings = settings;
         _takeFlow = takeFlow;
@@ -51,6 +54,7 @@ public partial class RecordViewModel : ObservableObject, IDisposable
         _hardwareKeys = hardwareKeys;
         _session = session;
         _time = time;
+        _logs = logs;
 
         SceneCol = new SlateColumnViewModel();
         ShotCol = new SlateColumnViewModel();
@@ -70,6 +74,27 @@ public partial class RecordViewModel : ObservableObject, IDisposable
 
     /// <summary>次列（1..200，TakeColumn 范围常量 N2）。</summary>
     public SlateColumnViewModel TakeCol { get; }
+
+    /// <summary>场记速览（quick_view_log_dialog 语义：fileName → tkNote；取当日末 40 条，对齐原版 sublist(40)）。</summary>
+    public ObservableCollection<SlateLogItem> QuickNotes { get; } = [];
+
+    /// <summary>刷新速览（C 在速览按钮点击时调用）。</summary>
+    public async Task RefreshQuickNotesAsync()
+    {
+        var today = VoiSlateDates.TodayKey(_time.Now);
+        var items = await _logs.GetByDateAsync(today);
+        QuickNotes.Clear();
+        foreach (var item in items.TakeLast(40))
+        {
+            QuickNotes.Add(item);
+        }
+    }
+
+    /// <summary>声音评价（DialFAB→TkStatus；镜像会话，原版 dial 语义）。</summary>
+    public void SetOkTake(TkStatus status) => _session.SetOkTake(status);
+
+    /// <summary>画面评价（DialFAB→ShtStatus）。</summary>
+    public void SetOkShot(ShtStatus status) => _session.SetOkShot(status);
 
     // ---- 显示状态 ----
 
@@ -471,6 +496,20 @@ public partial class RecordViewModel : ObservableObject, IDisposable
         _asr.Stop();
         AsrStatus = "空闲";
         OnPropertyChanged(nameof(IsRecording));
+    }
+
+    /// <summary>ASR 开关（C 的 Mock ASR 按钮；ToggleAsrCommand 生成）。</summary>
+    [RelayCommand]
+    private void ToggleAsr()
+    {
+        if (_asr.IsListening)
+        {
+            StopAsr();
+        }
+        else
+        {
+            StartAsr();
+        }
     }
 
     private void OnAsrFinalResult(string text)

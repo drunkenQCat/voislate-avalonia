@@ -1,20 +1,20 @@
 using Avalonia.Controls;
-using VoiSlate.ViewModels;
+using VoiSlate.Models;
 
 namespace VoiSlate.Views;
 
 /// <summary>
 /// Agent C：场记速览对话框（quick_view_log_dialog 语义）。
-/// DataContext/ItemsSource 由调用方注入 IReadOnlyList&lt;QuickNoteItem&gt;。
+/// DataContext/ItemsSource 由调用方注入 IReadOnlyList&lt;SlateLogItem&gt;。
 /// </summary>
 public partial class QuickViewLogWindow : Window
 {
-    private QuickViewLogWindow()
+    public QuickViewLogWindow()
     {
         InitializeComponent();
     }
 
-    public static Task ShowAsync(Window? owner, IReadOnlyList<QuickNoteItem> notes)
+    public static Task ShowAsync(Window? owner, IReadOnlyList<SlateLogItem> notes)
     {
         var window = new QuickViewLogWindow
         {

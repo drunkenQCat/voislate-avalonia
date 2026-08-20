@@ -38,18 +38,12 @@ public partial class RecordView : UserControl
             _dialsBuilt = true;
         }
 
-        vm.FileNumberEditRequested += OnFileNumberEditRequested;
-        vm.LinkerEditRequested += OnLinkerEditRequested;
-        vm.PrefixEditRequested += OnPrefixEditRequested;
         vm.Activate();
     }
 
     private void OnUnloaded(object? sender, RoutedEventArgs e)
     {
         if (Vm is not { } vm) return;
-        vm.FileNumberEditRequested -= OnFileNumberEditRequested;
-        vm.LinkerEditRequested -= OnLinkerEditRequested;
-        vm.PrefixEditRequested -= OnPrefixEditRequested;
         vm.Deactivate();
     }
 
@@ -83,12 +77,6 @@ public partial class RecordView : UserControl
         };
     }
 
-    private void OnFileNumberEditRequested() => _ = HandleEditAsync(EditRequestedSection.Number);
-
-    private void OnLinkerEditRequested() => _ = HandleEditAsync(EditRequestedSection.Linker);
-
-    private void OnPrefixEditRequested() => _ = HandleEditAsync(EditRequestedSection.Prefix);
-
     private async void OnFileCounterEditRequested(EditRequestedSection section) => await HandleEditAsync(section);
 
     private async Task HandleEditAsync(EditRequestedSection section)
@@ -101,10 +89,10 @@ public partial class RecordView : UserControl
             case EditRequestedSection.Number:
             {
                 var (ok, text) = await SmallEditDialog.ShowAsync(
-                    owner, "编辑文件号", "文件号（下限 1；D3 补零显示）", vm.CurrentFileNumberText);
+                    owner, "编辑文件号", "文件号（下限 1；D3 补零显示）", vm.NumberText);
                 if (ok && int.TryParse(text, out var number) && number >= 1)
                 {
-                    await vm.SetFileNumberAsync(number);
+                    await vm.EditFileNumberAsync(number);
                 }
 
                 break;
@@ -112,10 +100,10 @@ public partial class RecordView : UserControl
             case EditRequestedSection.Linker:
             {
                 var (ok, text) = await SmallEditDialog.ShowAsync(
-                    owner, "编辑链接符", "链接符（默认 -T，B6）", vm.CurrentFileLinker);
+                    owner, "编辑链接符", "链接符（默认 -T，B6）", vm.LinkerText);
                 if (ok)
                 {
-                    await vm.SetLinkerAsync(text);
+                    await vm.EditLinkerAsync(text);
                 }
 
                 break;
@@ -144,7 +132,7 @@ public partial class RecordView : UserControl
                 if (mode == PrefixType.Custom)
                 {
                     var (ok2, customText) = await SmallEditDialog.ShowAsync(
-                        owner, "自定义前缀", "前缀文本（custom）", vm.CurrentFilePrefix);
+                        owner, "自定义前缀", "前缀文本（custom）", vm.PrefixText);
                     if (!ok2)
                     {
                         return;
@@ -153,7 +141,7 @@ public partial class RecordView : UserControl
                     custom = customText;
                 }
 
-                await vm.SetPrefixAsync(mode, custom);
+                await vm.EditPrefixAsync(mode, custom);
                 break;
             }
         }

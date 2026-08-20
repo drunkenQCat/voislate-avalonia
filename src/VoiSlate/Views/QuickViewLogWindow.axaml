@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:VoiSlate.ViewModels"
+        xmlns:models="using:VoiSlate.Models"
         x:Class="VoiSlate.Views.QuickViewLogWindow"
         Title="场记速览"
         Width="540"
@@ -15,7 +15,7 @@
                TextWrapping="Wrap" />
     <ListBox x:Name="NotesList">
       <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="vm:QuickNoteItem">
+        <DataTemplate x:DataType="models:SlateLogItem">
           <Grid ColumnDefinitions="190,*" Margin="0,2">
             <TextBlock Text="{Binding FileName}" FontWeight="Bold" Foreground="#0067A0" />
             <TextBlock Grid.Column="1" Text="{Binding TkNote}" TextWrapping="Wrap" />

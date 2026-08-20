@@ -29,7 +29,7 @@ public class SlateLogViewModelTests
         };
         await flow.InitializeAsync(CancellationToken.None);
 
-        var vm = new SlateLogViewModel(flow, logs, time);
+        var vm = new SlateLogViewModel(flow, logs, time, new SpyExportService());
         return (vm, logs, flow, settings, fileNum);
     }
 

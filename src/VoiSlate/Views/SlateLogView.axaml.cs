@@ -41,14 +41,16 @@ public partial class SlateLogView : UserControl
     {
         if (Vm is not { } vm) return;
         if (sender is not Button { Tag: SlateLogItem item }) return;
-        vm.RequestEdit(item); // 日期守卫 + 索引解析 + EditRequested 事件（stub：跨日限制提示）
+        vm.RequestEdit(item); // 日期守卫 + 索引解析 + 构造 LogEditorViewModel（写入口仅 ITakeFlowService）
     }
 
-    private async void OnVmEditRequested(SlateLogItem item, int index)
+    private async void OnVmEditRequested(LogEditorViewModel editor)
     {
-        if (Vm is not { } vm) return;
-        var owner = this.VisualRoot as Window;
-        if (owner == null) return;
-        await LogEditorWindow.ShowDialogAsync(owner, item, index, vm.TakeFlowService);
+        if (this.VisualRoot is not Window owner)
+        {
+            return;
+        }
+
+        await LogEditorWindow.ShowDialogAsync(owner, editor);
     }
 }

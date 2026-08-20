@@ -17,13 +17,14 @@
 
     <!-- 顶部操作 -->
     <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
-      <Button Content="导入 CSV" Command="{Binding ImportCsvCommand}" />
+      <Button Content="导入 CSV" Click="OnImportCsvClick" />
       <Button Content="场次＋" Command="{Binding AddSceneCommand}" />
       <Button Content="镜头＋" Command="{Binding AddShotCommand}" />
-      <Button Content="编辑（占位）" Command="{Binding EditItemCommand}" CommandParameter="shot" />
+      <Button Content="编辑镜备注" Click="OnEditClick" />
       <Button Content="删除场" Foreground="#C62828" Command="{Binding DeleteItemCommand}" CommandParameter="scene" />
       <Button Content="删除镜" Foreground="#C62828" Command="{Binding DeleteItemCommand}" CommandParameter="shot" />
-      <Button Content="拖拽排序（占位）" Command="{Binding MoveItemCommand}" CommandParameter="scene" />
+      <Button Content="↓ 场下移" Command="{Binding MoveItemCommand}" CommandParameter="scene" />
+      <Button Content="↓ 镜下移" Command="{Binding MoveItemCommand}" CommandParameter="shot" />
     </StackPanel>
 
     <!-- 左：场列表 -->
