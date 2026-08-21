@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoiSlate UI 原型（复刻大框架 · 讨论画板）</title>
+<style>
+  /* ============ 主题（对应 VoiSlatePalette / Converters 色值） ============ */
+  :root {
+    --primary: #0067A0;          /* bahamaBlue VoiSlate.Primary */
+    --primary-soft: #220067A0;   /* 导航高亮 (PageKeyToBrushConverter) */
+    --bg: #FBFBFB;               /* VoiSlate.Bg（Converters 内联值） */
+    --card: #FFFFFF;
+    --rail: #F4F4F4;             /* 左栏 */
+    --rail-border: #DDDDDD;
+    --ok: #2E7D32;               /* OkGreen（内联）/ 主题为 #4CAF50 */
+    --bad: #C62828;              /* BadRed */
+    --nice: #B8860B;             /* NiceGold */
+    --hint: #888888;             /* TextHint */
+    --text: #212121;
+    --wheel-bg: #D1C4E9;         /* WheelItemBackground */
+    --dial-notchecked: #F2F5DE;
+    --card-border: #E0E0E0;
+    --red: #EF9A9A;  --green: #A5D6A7;  /* 滑条插值两端 */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: #8a8a8a;        /* 窗口外的桌面感 */
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; color: var(--text); font-size: 14px;
+  }
+  /* ============ 窗口 ============ */
+  .window {
+    width: 1280px; height: 800px; max-width: 100%;
+    background: var(--bg); border-radius: 10px; overflow: hidden;
+    box-shadow: 0 12px 48px rgba(0,0,0,.35);
+    display: grid; grid-template-columns: 190px 1fr;
+  }
+  /* ============ 左栏导航 ============ */
+  .nav {
+    background: var(--rail); border-right: 1px solid var(--rail-border);
+    display: flex; flex-direction: column; padding: 0 10px;
+  }
+  .brand { font-size: 24px; font-weight: 700; color: var(--primary); padding: 24px 20px 18px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; margin: 2px 0; border: none; background: transparent;
+    font-size: 15px; color: var(--text); border-radius: 4px; cursor: pointer;
+    font-family: inherit; text-align: left; width: 100%;
+  }
+  .nav-item:hover { background: rgba(0,0,0,.05); }
+  .nav-item.active { background: var(--primary-soft); }
+  .nav-item svg { width: 18px; height: 18px; flex: none; }
+  .nav-spacer { flex: 1; }
+  .nav-foot { font-size: 11px; color: var(--hint); padding: 10px 12px; }
+  /* ============ 主内容 ============ */
+  .main { overflow: hidden; display: flex; flex-direction: column; position: relative; }
+  .page { display: none; height: 100%; padding: 20px 24px; overflow: auto; }
+  .page.active { display: block; }
+  .page-title { font-size: 20px; font-weight: 600; margin-bottom: 14px; color: var(--text); }
+  /* 通用卡片 */
+  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 14px; }
+  .row { display: flex; gap: 12px; }
+  .grow { flex: 1; }
+  .btn {
+    border: 1px solid var(--rail-border); background: #fff; border-radius: 6px;
+    padding: 6px 12px; cursor: pointer; font-size: 13px; font-family: inherit;
+  }
+  .btn:hover { background: #f0f0f0; }
+  .btn.accent { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.accent:hover { background: #00588c; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .hint { color: var(--hint); font-size: 12px; }
+  .chip { display: inline-block; background: #EDEDED; border-radius: 10px; padding: 2px 10px; font-size: 12px; margin: 2px; }
+  /* ============ 记录页 ============ */
+  .rec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .stat-cards { display: flex; gap: 12px; margin-bottom: 14px; }
+  .stat-card { flex: 1; text-align: center; padding: 10px; }
+  .stat-card .k { font-size: 12px; color: var(--hint); }
+  .stat-card .v { font-size: 22px; font-weight: 700; margin-top: 2px; }
+  .wheel-col { flex: 1; text-align: center; }
+  .wheel-col h4 { font-size: 13px; color: var(--hint); font-weight: 500; margin-bottom: 6px; }
+  .wheel {
+    background: var(--wheel-bg); border-radius: 8px; padding: 8px 4px; height: 240px;
+    overflow: hidden; position: relative; user-select: none;
+  }
+  .wheel .w-item {
+    height: 48px; line-height: 48px; font-size: 16px; text-align: center;
+    color: #5A5A5A; border-radius: 6px; cursor: pointer; transition: all .12s;
+  }
+  .wheel .w-item.sel { color: #212121; font-weight: 700; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+  .wheel .w-mid { position: absolute; left: 6px; right: 6px; top: 104px; height: 48px; border: 1px dashed rgba(0,0,0,.18); border-radius: 6px; pointer-events: none; }
+  .wheel-buttons { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
+  .wheel-buttons .btn { padding: 2px 14px; }
+  /* 文件号三卡片 */
+  .file-counter { display: flex; gap: 10px; align-items: stretch; }
+  .fcard {
+    background: #fff; border: 1px solid #CFD8DC; border-radius: 8px; padding: 10px 12px;
+    text-align: center; cursor: pointer; min-width: 92px; position: relative;
+  }
+  .fcard:hover { background: #f7fafc; }
+  .fcard .fk { font-size: 11px; color: var(--hint); }
+  .fcard .fv { font-size: 20px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  /* 滑条 */
+  .slide-bar {
+    margin-top: 12px; border-radius: 48px; height: 64px; position: relative;
+    transition: background-color .1s; border: 1px solid var(--card-border); overflow: hidden;
+  }
+  .slide-bar .ball {
+    width: 44px; height: 44px; border-radius: 50%; background: var(--primary);
+    position: absolute; top: 9px; left: calc(50% - 22px); cursor: grab;
+    box-shadow: 0 2px 6px rgba(0,0,0,.3); display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 18px; touch-action: none;
+  }
+  .slide-bar .sb-hint { position: absolute; top: 21px; font-size: 13px; color: rgba(0,0,0,.55); }
+  .sb-hint.left  { left: 24px; } .sb-hint.right { right: 24px; }
+  .note-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .note-inputs label { font-size: 12px; color: var(--hint); display: block; margin-bottom: 4px; }
+  .note-inputs textarea {
+    width: 100%; height: 64px; border: 1px solid var(--card-border); border-radius: 6px;
+    padding: 8px; font-family: inherit; font-size: 13px; resize: none; background: #fff;
+  }
+  /* DialFAB 评价拨盘 */
+  .dial-wrap { display: flex; gap: 16px; margin-top: 14px; align-items: center; }
+  .dial { position: relative; }
+  .dial .main-btn {
+    width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--dial-notchecked); box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    font-size: 22px; display: flex; align-items: center; justify-content: center;
+  }
+  .dial .main-btn.dial-ok   { background: var(--ok);   color: #fff; }
+  .dial .main-btn.dial-bad  { background: var(--bad);  color: #fff; }
+  .dial .main-btn.dial-nice { background: var(--nice); color: #fff; }
+  .dial .opts {
+    position: absolute; left: 0; top: 64px; background: #fff; border: 1px solid var(--rail-border);
+    border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.18); min-width: 128px;
+    padding: 6px; display: none; z-index: 20;
+  }
+  .dial.open .opts { display: block; }
+  .dial .opt { padding: 8px 10px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .dial .opt:hover { background: #f0f4f8; }
+  /* ============ 计划页 ============ */
+  .toolbar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .plan-grid { display: grid; grid-template-columns: 260px 1fr; gap: 14px; }
+  .listbox { border: 1px solid var(--card-border); border-radius: 8px; background: #fff; overflow: hidden; }
+  .lb-item { padding: 10px 12px; border-bottom: 1px solid #F0F0F0; cursor: pointer; }
+  .lb-item:last-child { border-bottom: none; }
+  .lb-item:hover { background: #f7f9fb; }
+  .lb-item.sel { background: var(--primary-soft); }
+  .lb-item .t { font-weight: 600; }
+  .lb-item .s { font-size: 12px; color: var(--hint); }
+  /* ============ 场记页 ============ */
+  .date-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .date-tab { padding: 6px 14px; border-radius: 16px; border: 1px solid var(--card-border); background: #fff; cursor: pointer; }
+  .date-tab.sel { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .log-card { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
+  .dot.nice { background: var(--nice); } .dot.na { background: #9E9E9E; }
+  .log-card .file { font-weight: 600; min-width: 110px; font-variant-numeric: tabular-nums; }
+  .log-card .meta { color: var(--hint); font-size: 12px; min-width: 130px; }
+  .log-card .note { flex: 1; font-size: 13px; color: #444; }
+  /* ============ 设置页 ============ */
+  .set-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .set-row label { min-width: 110px; color: #333; }
+  .set-row input[type=text], .set-row select {
+    border: 1px solid var(--card-border); border-radius: 6px; padding: 6px 10px; font-size: 13px; font-family: inherit;
+  }
+  .switch { width: 42px; height: 24px; border-radius: 12px; background: #ccc; position: relative; cursor: pointer; }
+  .switch.on { background: var(--primary); }
+  .switch::after { content: ""; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .15s; }
+  .switch.on::after { left: 20px; }
+  /* 弹窗 */
+  .modal-mask {
+    position: absolute; inset: 0; background: rgba(0,0,0,.35); display: none;
+    align-items: center; justify-content: center; z-index: 50;
+  }
+  .modal-mask.show { display: flex; }
+  .modal { background: #fff; border-radius: 10px; width: 420px; padding: 18px; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
+  .modal h3 { font-size: 16px; margin-bottom: 12px; }
+  .modal .m-field { margin-bottom: 10px; }
+  .modal .m-field label { display: block; font-size: 12px; color: var(--hint); margin-bottom: 4px; }
+  .modal .m-field input, .modal .m-field select {
+    width: 100%; border: 1px solid var(--card-border); border-radius: 6px; padding: 7px 10px; font-size: 13px; font-family: inherit;
+  }
+  .modal .m-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="window" id="app">
+
+  <!-- ================= 左栏导航 ================= -->
+  <nav class="nav">
+    <div class="brand">VoiSlate</div>
+    <button class="nav-item active" data-page="record">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,14C13.66,14 15,12.66 15,11V5C15,3.34 13.66,2 12,2C10.34,2 9,3.34 9,5V11C9,12.66 10.34,14 12,14Z"/><path d="M18,11C18,14.53 15.06,17.44 11.53,17.5C8.08,17.56 5,14.93 5,11H3.13C3.13,14.66 6.31,17.66 10,17.9V21H14V17.9C17.69,17.66 20.87,14.66 20.87,11H18Z"/></svg>
+      记录
+    </button>
+    <button class="nav-item" data-page="schedule">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19,4H18V2H16V4H8V2H6V4H5C3.9,4 3,4.9 3,6V20C3,21.1 3.9,22 5,22H19C20.1,22 21,21.1 21,20V6C21,4.9 20.1,4 19,4Z"/><path d="M19,20H5V9H19V20Z"/></svg>
+      计划
+    </button>
+    <button class="nav-item" data-page="slatelog">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,13H11V11H3Z M3,17H11V15H3Z M3,9H11V7H3Z M13,13H21V11H13Z M13,17H21V15H13Z M13,9H21V7H13Z"/></svg>
+      场记
+    </button>
+    <button class="nav-item" data-page="settings">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.43,12.98C19.47,12.66 19.5,12.34 19.5,12C19.5,11.66 19.47,11.34 19.43,11.02L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.97 19.05,5.05L16.56,6.05C16.04,5.66 15.48,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2L10,2C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.52,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.97 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11.02C4.53,11.34 4.5,11.66 4.5,12C4.5,12.34 4.53,12.66 4.57,12.98L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.95C7.96,18.34 8.52,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22L14,22C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.48,18.68 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63Z"/><path d="M12,15.5C10.07,15.5 8.5,13.93 8.5,12C8.5,10.07 10.07,8.5 12,8.5C13.93,8.5 15.5,10.07 15.5,12C15.5,13.93 13.93,15.5 12,15.5Z"/></svg>
+      设置
+    </button>
+    <div class="nav-spacer"></div>
+    <div class="nav-foot">v0.x 原型 · 桌面 1280×800</div>
+  </nav>
+
+  <!-- ================= 主内容 ================= -->
+  <main class="main" id="main">
+
+    <!-- ========== 记录页 ========== -->
+    <section class="page active" id="page-record">
+      <div class="page-title">记录</div>
+
+      <div class="stat-cards">
+        <div class="card stat-card"><div class="k">场</div><div class="v" id="st-scn">1A</div></div>
+        <div class="card stat-card"><div class="k">镜</div><div class="v" id="st-sht">1A</div></div>
+        <div class="card stat-card"><div class="k">次</div><div class="v" id="st-tk">1</div></div>
+        <div class="card stat-card"><div class="k">文件号</div><div class="v" id="st-fn">260821-T001</div></div>
+        <div class="card stat-card"><div class="k">本日计数</div><div class="v" id="st-cnt">3</div></div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div class="wheel-col">
+            <h4>场</h4>
+            <div class="wheel" data-wheel="scn">
+              <div class="w-mid"></div><div class="w-items"></div>
+            </div>
+            <div class="wheel-buttons"><button class="btn" data-wup="scn">▲</button><button class="btn" data-wdn="scn">▼</button></div>
+          </div>
+          <div class="wheel-col">
+            <h4>镜</h4>
+            <div class="wheel" data-wheel="sht">
+              <div class="w-mid"></div><div class="w-items"></div>
+            </div>
+            <div class="wheel-buttons"><button class="btn" data-wup="sht">▲</button><button class="btn" data-wdn="sht">▼</button></div>
+          </div>
+          <div class="wheel-col">
+            <h4>次</h4>
+            <div class="wheel" data-wheel="tk">
+              <div class="w-mid"></div><div class="w-items"></div>
+            </div>
+            <div class="wheel-buttons"><button class="btn" data-wup="tk">▲</button><button class="btn" data-wdn="tk">▼</button></div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px">
+          <div class="file-counter" title="点击卡片编辑（原型）">
+            <div class="fcard"><div class="fk">前缀</div><div class="fv" id="fc-prefix">260821</div></div>
+            <div class="fcard"><div class="fk">链接符</div><div class="fv" id="fc-linker">-T</div></div>
+            <div class="fcard"><div class="fk">编号</div><div class="fv" id="fc-num">001</div></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-left:6px">
+              <button class="btn" id="btn-pad" style="font-weight:600">补录</button>
+              <div class="hint">未联动：次与文件号解绑</div>
+            </div>
+          </div>
+
+          <div class="slide-bar" id="slideBar">
+            <div class="sb-hint left">◀ 撤回</div>
+            <div class="sb-hint right">记条 ▶</div>
+            <div class="ball" id="slideBall">●</div>
+          </div>
+        </div>
+
+        <div class="note-inputs">
+          <div>
+            <label>镜头描述（Desc）</label>
+            <textarea id="txt-desc" placeholder="如：小插曲——两人对峙，镜头推进">小插曲</textarea>
+          </div>
+          <div>
+            <label>镜头备注（ShotNote · 对象协议 &lt;obj/&gt;）</label>
+            <textarea id="txt-note">两人对峙<缪尔赛斯/><塞雷娅/></textarea>
+          </div>
+        </div>
+
+        <div class="dial-wrap">
+          <div class="dial" id="dial-tk">
+            <div class="main-btn" title="声音评价">🎙️</div>
+            <div class="opts">
+              <div class="opt" data-v="ok">✓ 声音可</div>
+              <div class="opt" data-v="bad">✗ 声音弃</div>
+              <div class="opt" data-v="na">— 未评</div>
+            </div>
+          </div>
+          <div class="dial" id="dial-sht">
+            <div class="main-btn" title="画面评价">🎬</div>
+            <div class="opts">
+              <div class="opt" data-v="ok">✓ 画面保</div>
+              <div class="opt" data-v="nice">★ 画面过</div>
+              <div class="opt" data-v="na">— 未评</div>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <div class="hint" id="dial-state">声音未评 · 画面未评</div>
+          <button class="btn" onclick="quickView()">速览场记（QuickView）</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="row" style="align-items:center;justify-content:space-between">
+          <div><span style="font-weight:600">上一拍备注（prev_note_editor）</span>
+            <div class="hint" id="prev-note">Tk 1 · 小插曲 —— 无备注更新</div></div>
+          <button class="btn accent" onclick="doTake('normal')" style="padding:8px 22px">📝 记条</button>
+        </div>
+        <div class="row" style="margin-top:10px;gap:8px">
+          <button class="btn" onclick="doTake('fake')">假拍（Fake）</button>
+          <button class="btn" onclick="doTake('end')">收工（End）</button>
+          <button class="btn" onclick="doTake('wild')">野拍（Wild）</button>
+          <button class="btn" onclick="doRewind()">⟲ 撤回</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 计划页 ========== -->
+    <section class="page" id="page-schedule">
+      <div class="page-title">计划</div>
+      <div class="toolbar">
+        <button class="btn" onclick="alert('原型：StorageProvider 选 *.csv')">📂 导入 CSV</button>
+        <button class="btn" onclick="addScene()">＋ 场次</button>
+        <button class="btn" onclick="addShot()">＋ 镜头</button>
+        <button class="btn" onclick="editShot()">✏️ 编辑镜备注</button>
+        <button class="btn" onclick="deleteSel()">🗑 删除</button>
+        <button class="btn" onclick="moveShot(1)">⬇ 下移</button>
+        <div style="flex:1"></div>
+        <span class="hint">选择联动会话索引（递归）</span>
+      </div>
+      <div class="plan-grid">
+        <div class="listbox" id="scene-list"></div>
+        <div class="listbox" id="shot-list"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="k hint" style="font-size:12px;margin-bottom:4px">场备注（NoteEditor）</div>
+        <div id="scene-note" style="font-size:13px">万星园 · 缪尔赛斯 / 塞雷娅 / 克里斯滕</div>
+      </div>
+    </section>
+
+    <!-- ========== 场记页 ========== -->
+    <section class="page" id="page-slatelog">
+      <div class="page-title">场记 <span class="hint" id="lg-today" style="font-weight:400"></span></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="date-tabs" id="date-tabs"></div>
+        <div style="flex:1"></div>
+        <button class="btn" onclick="alert('原型：导出 JSON（当前目录参数为空会抛异常，真实已知 bug）')">⬇ 导出 JSON</button>
+      </div>
+      <div style="margin-top:12px" id="log-list"></div>
+    </section>
+
+    <!-- ========== 设置页 ========== -->
+    <section class="page" id="page-settings">
+      <div class="page-title">设置</div>
+      <div class="card" style="max-width:560px">
+        <div class="set-row"><label>工程名</label><input type="text" id="set-project" value="VoiSlate 测试工程"><button class="btn" style="margin-left:8px">保存</button></div>
+        <div class="set-row"><label>记录链接符</label><input type="text" id="set-linker" value="-T" style="width:80px"></div>
+        <div class="set-row"><label>前缀模式</label>
+          <select id="set-prefix">
+            <option value="date" selected>默认（日期 yymmdd）</option>
+            <option value="snd">声音设备（yyYmMd）</option>
+            <option value="custom">自定义</option>
+          </select>
+          <input type="text" id="set-custom" placeholder="自定义前缀…" disabled style="width:120px">
+        </div>
+        <div class="set-row"><label>补录联动</label><div class="switch on" id="set-link" onclick="toggleLink(this)"></div><span class="hint">IsLinked：次与文件号同步</span></div>
+      </div>
+      <div class="card" style="max-width:560px;margin-top:14px">
+        <div class="set-row"><label>今日计数</label><span id="set-count">3</span></div>
+        <div class="set-row">
+          <button class="btn" onclick="alert('原型：导出全部（跨日合并，不可逆）')">⬇ 导出全部</button>
+          <button class="btn" style="color:var(--bad)" onclick="confirmClear()">🗑 清空所有场记</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= 弹窗 ================= -->
+  <div class="modal-mask" id="modal">
+    <div class="modal">
+      <h3 id="modal-title">编辑</h3>
+      <div id="modal-body"></div>
+      <div class="m-actions">
+        <button class="btn" onclick="closeModal()">取消</button>
+        <button class="btn accent" onclick="submitModal()">确定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= 状态（模拟 DI 单例仓库） ================= */
+const state = {
+  page: 'record',
+  scnIdx: 0, shtIdx: 0, tkIdx: 0,
+  isLinked: true, fileNum: 3, linker: '-T', prefix: '260821', customPrefix: '',
+  prefixMode: 'date',
+  tkDial: 'na', shtDial: 'na',        // na|ok|bad|nice
+  logs: [],                              // 当日场记（fileName 升序）
+  modal: null, modalCb: null,
+};
+
+// SeedData（对照 Data/SeedData.cs：1A 万星园 / 2A 洛肯实验室）
+const scenes = [
+  { key: '1A', name: '万星园', objects: ['缪尔赛斯','塞雷娅','克里斯滕'], shots: [
+      { key: '1A', jb: '近景', con: '小插曲' },
+      { key: '2B', jb: '特写', con: '两人对峙' },
+      { key: '3C', jb: '中景', con: '介绍生态园' } ] },
+  { key: '2A', name: '洛肯实验室', objects: ['Dr','凯尔希','迷迭香'], shots: [
+      { key: '1A', jb: '近景', con: '小插曲' },
+      { key: '2B', jb: '特写', con: '两人对峙' },
+      { key: '3C', jb: '中景', con: '介绍生态园' } ] },
+];
+const TAKE_MAX = 200;
+function p3(n){ return String(n).padStart(3,'0'); }
+function currentScn(){ return scenes[state.scnIdx]; }
+function currentSht(){ return currentScn().shots[state.shtIdx]; }
+
+// 初始当日日志（模拟三余条 + 上一拍）
+function seedLogs(){
+  state.logs = [
+    { f: '260821-T001', scn:'1A', sht:'1A', tk:1, note:'小插曲——引入', tkSt:'ok', shtSt:'nice' },
+    { f: '260821-T002', scn:'1A', sht:'2B', tk:1, note:'两人对峙 推进', tkSt:'ok', shtSt:'na' },
+    { f: '260821-T003', scn:'1A', sht:'3C', tk:1, note:'介绍生态园', tkSt:'bad', shtSt:'na' },
+  ];
+}
+
+/* ================= 渲染 ================= */
+function renderWheels(){
+  const cols = {
+    scn: scenes.map(s => s.key + ' ' + s.name),
+    sht: currentScn().shots.map(s => s.key),
+    tk: Array.from({length: TAKE_MAX}, (_,i)=> i+1),
+  };
+  const selIdx = { scn: state.scnIdx, sht: state.shtIdx, tk: state.tkIdx };
+  for (const [key, items] of Object.entries(cols)){
+    const host = document.querySelector(`.wheel[data-wheel="${key}"] .w-items`);
+    // 显示窗口：选中项居中 ±2
+    const isTk = key === 'tk';
+    const si = selIdx[key];
+    const win = isTk ? [Math.max(0,si-2), Math.min(TAKE_MAX-1,si+2)] : [0, items.length-1];
+    host.innerHTML = '';
+    for (let i=win[0]; i<=win[1]; i++){
+      const d = document.createElement('div');
+      d.className = 'w-item' + (i===si ? ' sel' : '');
+      d.textContent = isTk ? p3(i+1) : items[i];
+      d.onclick = () => setWheel(key, i);
+      host.appendChild(d);
+    }
+  }
+  document.getElementById('st-scn').textContent = currentScn().key;
+  document.getElementById('st-sht').textContent = currentSht().key;
+  document.getElementById('st-tk').textContent = state.tkIdx+1;
+  document.getElementById('st-fn').textContent = fileFullName();
+  document.getElementById('st-cnt').textContent = state.logs.length;
+  document.getElementById('fc-prefix').textContent = state.prefix;
+  document.getElementById('fc-linker').textContent = state.linker;
+  document.getElementById('fc-num').textContent = p3(state.fileNum);
+  document.getElementById('prev-note').textContent =
+    `Tk ${state.logs.length} · ${state.logs[state.logs.length-1]?.note ?? '无'}`;
+}
+function setWheel(key, i){
+  if (key==='scn') { state.scnIdx = i; state.shtIdx = 0; }
+  if (key==='sht') state.shtIdx = i;
+  if (key==='tk') state.tkIdx = i;
+  renderWheels();
+}
+document.querySelectorAll('[data-wup],[data-wdn]').forEach(b=>{
+  b.onclick = () => {
+    const key = b.dataset.wup ? b.dataset.wup : b.dataset.wdn;
+    const dir = b.dataset.wup ? 1 : -1;
+    const max = key==='scn' ? scenes.length-1 : key==='sht' ? currentScn().shots.length-1 : TAKE_MAX-1;
+    // 联动：补录开关（原型里模拟 IsLinked=false 时 Take 不随滚动变化——这里简化只动当前列）
+    const next = Math.min(max, Math.max(0, {scn:state.scnIdx,sht:state.shtIdx,tk:state.tkIdx}[key] + dir));
+    setWheel(key, next);
+  };
+});
+
+function fileFullName(){
+  // B6：prefix + linker + D3
+  return state.prefix + state.linker + p3(state.fileNum);
+}
+
+/* ============ 导航 ============ */
+document.querySelectorAll('.nav-item').forEach(b=>{
+  b.onclick = () => {
+    document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    document.getElementById('page-'+b.dataset.page).classList.add('active');
+  };
+});
+
+/* ============ 记录：记条 / 撤回 / Dial ============ */
+function doTake(type){
+  const scn = currentScn(), sht = currentSht();
+  const sign = state.tkIdx + 1;
+  const entry = { f: fileFullName(), scn: scn.key, sht: sht.key, tk: sign,
+                  note: (type==='fake' ? 'Fake Take' : (type==='wild' ? 'wild track ' + document.getElementById('txt-note').value.split('<')[0] : (document.getElementById('txt-desc').value||'') + ' ' + sht.con)),
+                  tkSt: type==='fake' ? 'bad' : (state.tkDial==='na' ? 'na' : state.tkDial),
+                  shtSt: state.shtDial==='na' ? 'na' : state.shtDial };
+  if (type === 'end') {
+    alert('原型（B2 复刻）：收工条 —— 不递增文件号，history 记 OK');
+    entry.note = '收工';
+  } else {
+    state.fileNum++;            // B7：非 End 递增
+  }
+  state.logs.push(entry);
+  state.tkDial='na'; state.shtDial='na';
+  renderWheels(); renderDial(); renderLogs(); renderDates();
+  if (type==='fake') state.fileNum--; // 原型便捷：假拍后回退便于继续演示
+  renderWheels();
+}
+function doRewind(){
+  if (!state.logs.length){ alert('无可撤回 (B1: 首按不写日志)'); return; }
+  const last = state.logs[state.logs.length-1];
+  if (last.note.startsWith('收工')){
+    alert('原型（B2）：OK 尾只弹哨兵 —— “原来还没收工呢……” + 恢复备注，不递减不删条');
+  } else {
+    state.logs.pop();
+    if (state.fileNum>1) state.fileNum--;
+    alert('原型：撤回 → 递减文件号、弹 history 尾、删末条、恢复备注');
+  }
+  renderWheels(); renderLogs(); renderDates();
+}
+function renderDial(){
+  const set = (id, v)=>{
+    const d = document.getElementById(id);
+    d.querySelector('.main-btn').className = 'main-btn' + (v!=='na' ? ' dial-'+v : '');
+  };
+  set('dial-tk', state.tkDial); set('dial-sht', state.shtDial);
+  document.getElementById('dial-state').textContent =
+    `声音${state.tkDial==='ok'?'可':state.tkDial==='bad'?'弃':'未评'} · 画面${state.shtDial==='ok'?'保':state.shtDial==='nice'?'过':'未评'}`;
+}
+document.querySelectorAll('.dial').forEach(d=>{
+  d.querySelector('.main-btn').onclick = (e)=>{ e.stopPropagation(); d.classList.toggle('open'); };
+  d.querySelectorAll('.opt').forEach(o=>{
+    o.onclick = () => {
+      const v = o.dataset.v;
+      if (d.id==='dial-tk') state.tkDial = v; else state.shtDial = v;
+      d.classList.remove('open'); renderDial();
+    };
+  });
+});
+document.addEventListener('click', ()=> document.querySelectorAll('.dial.open').forEach(d=>d.classList.remove('open')));
+
+/* ============ 滑条（原型交互：拖球 → 背景红绿，松手回中） ============ */
+(function(){
+  const bar = document.getElementById('slideBar'); const ball = document.getElementById('slideBall');
+  let dragging = false;
+  function posFromX(e){
+    const r = bar.getBoundingClientRect();
+    const x = (e.touches? e.touches[0].clientX : e.clientX) - r.left;
+    return Math.min(r.width-44, Math.max(0, x - 22));
+  }
+  function paint(x){
+    const r = bar.getBoundingClientRect();
+    const t = r.width>44 ? x/(r.width-44) : 0.5;      // 0=最左(红) 1=最右(绿)
+    const mix = (a,b,k)=> Math.round(a+(b-a)*k);
+    bar.style.background = `linear-gradient(90deg, rgba(255,255,255,.0), rgba(255,255,255,.0))`;
+    const red = [239,154,154], green = [165,214,167];
+    const mid = t<0.5 ? [red.map((c,i)=>mix(255,c,t*2))] : [green.map((c,i)=>mix(green[i],255,(t-0.5)*2))];
+    bar.style.backgroundColor = `rgb(${mid[0].join(',')})`;
+    ball.style.left = x + 'px';
+  }
+  ball.addEventListener('pointerdown', e=>{ dragging=true; ball.setPointerCapture(e.pointerId); paint(posFromX(e)); });
+  ball.addEventListener('pointermove', e=>{ if(dragging) paint(posFromX(e)); });
+  ball.addEventListener('pointerup', e=>{
+    if(!dragging) return; dragging=false;
+    const r = bar.getBoundingClientRect();
+    const x = posFromX(e);
+    if (x >= r.width-60) doTake('normal');       // 右滑过阈值 → 记条
+    else if (x <= 10) doRewind();                // 左滑过 0 → 撤回
+    ball.style.left = 'calc(50% - 22px)';          // 松手 200ms 回弹
+    bar.style.backgroundColor = 'transparent';
+  });
+})();
+
+/* ============ 速览 / 弹窗 ============ */
+function quickView(){
+  const brief = state.logs.slice(-5);
+  openModal('场记速览（QuickView）', brief.map(l=>`<div style="padding:4px 0;border-bottom:1px solid #f0f0f0"><b>${l.f}</b> · ${l.scn}-${l.sht}-${l.tk}${stateDot(l.tkSt)}${stateDot(l.shtSt)} · ${l.note||'—'}</div>`).join('') || '<div class="hint">暂无场记</div>', null);
+}
+function stateDot(s){ return s==='ok'?' ✓':s==='bad'?' ✗':s==='nice'?' ★':''; }
+function openModal(title, body, cb){ state.modal = (state.modal+1||1); $('#modal-title').textContent = title; $('#modal-body').innerHTML = body; state.modalCb = cb; $('#modal').classList.add('show'); }
+function closeModal(){ $('#modal').classList.remove('show'); state.modalCb=null; }
+function submitModal(){ if(state.modalCb){ const f = state.modalCb(); if(f!==false) closeModal(); } else closeModal(); }
+function $(id){ return document.getElementById(id); }
+
+/* ============ 计划页 ============ */
+function renderPlan(){
+  const sl = $('#scene-list'); sl.innerHTML='';
+  scenes.forEach((s,i)=>{
+    const d=document.createElement('div');
+    d.className='lb-item'+(i===state.scnIdx?' sel':'');
+    d.innerHTML = `<div class="t">${s.key} ${s.name}</div><div class="s">${s.shots.length} 镜 · ${s.objects.join(' / ')}</div>`;
+    d.onclick = ()=>{ state.scnIdx=i; state.shtIdx=0; renderPlan(); renderWheels(); };
+    sl.appendChild(d);
+  });
+  const sh = $('#shot-list'); sh.innerHTML='';
+  currentScn().shots.forEach((s,i)=>{
+    const d=document.createElement('div');
+    d.className='lb-item'+(i===state.shtIdx?' sel':'');
+    d.innerHTML = `<div class="t">${s.key} ${s.jb}</div><div class="s">${s.con} · 景别默认 近景</div>`;
+    d.onclick = ()=>{ state.shtIdx=i; renderPlan(); renderWheels(); };
+    sh.appendChild(d);
+  });
+  $('#scene-note').textContent = `${currentScn().name} · ${currentScn().objects.join(' / ')}`;
+}
+function addScene(){ const k=prompt('新场景号:'); if(k) scenes.push({key:k,name:'新场景',objects:['Boom'],shots:[{key:k,jb:'近景',con:'新镜头'}]}); renderPlan(); }
+function addShot(){ const k=prompt('新镜头号:'); if(k) currentScn().shots.push({key:k,jb:'近景',con:'空镜头'}); renderPlan(); }
+function editShot(){
+  const s = currentSht();
+  openModal('编辑镜备注', `
+    <div class="m-field"><label>镜头内容</label><input id="m-con" value="${s.con}"></div>
+    <div class="m-field"><label>景别</label><input id="m-jb" value="${s.jb}"></div>
+    <div class="m-field"><label>对象（逗号分隔）</label><input id="m-objs" value="${currentScn().objects.join(',')}"></div>`,
+    ()=>{ s.con=$('#m-con').value; s.jb=$('#m-jb').value; currentScn().objects=$('#m-objs').value.split(','); renderPlan(); });
+}
+function deleteSel(){
+  if(!confirm('删除当前选中（场或镜）？')) return;
+  if (currentScn().shots.length>1){ currentScn().shots.splice(state.shtIdx,1); state.shtIdx=0; }
+  else if(scenes.length>1){ scenes.splice(state.scnIdx,1); state.scnIdx=0; state.shtIdx=0; }
+  else alert('至少保留 1 场 1 镜'); 
+  renderPlan(); renderWheels();
+}
+function moveShot(dir){
+  const n=currentScn().shots.length, i=state.shtIdx, j=i+dir;
+  if(j<0||j>=n) return;
+  [currentScn().shots[i],currentScn().shots[j]]=[currentScn().shots[j],currentScn().shots[i]];
+  state.shtIdx=j; renderPlan();
+}
+
+/* ============ 场记页 ============ */
+const DATES = ['260821（今日）','260820','260819'];
+function renderDates(){
+  const tabs = $('#date-tabs'); tabs.innerHTML='';
+  DATES.forEach((d,i)=>{
+    const b=document.createElement('button');
+    b.className='date-tab'+(i===0?' sel':'');
+    b.textContent=d; b.onclick=()=>{ document.querySelectorAll('.date-tab').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); };
+    tabs.appendChild(b);
+  });
+  $('#lg-today').textContent = '· 今日场记 ' + state.logs.length + ' 条';
+}
+function renderLogs(){
+  const host = $('#log-list'); host.innerHTML='';
+  if(!state.logs.length){ host.innerHTML='<div class="hint">今日暂无场记（B1：首按不写）</div>'; return; }
+  state.logs.slice().reverse().forEach((l,i)=>{
+    const card=document.createElement('div');
+    card.className='card log-card';
+    card.innerHTML = `
+      <div class="dot ${l.tkSt!=='na'?l.tkSt:'na'}"></div>
+      <div class="dot ${l.shtSt!=='na'?l.shtSt:'na'}"></div>
+      <div class="file">${l.f}</div>
+      <div class="meta">${l.scn}-${l.sht} · Tk ${l.tk}</div>
+      <div class="note">${l.note||'—'}</div>
+      <button class="btn" onclick="editLog(${state.logs.length-1-i})">编辑</button>
+      <button class="btn" onclick="delLog(${state.logs.length-1-i})">删除</button>`;
+    host.appendChild(card);
+  });
+}
+function editLog(i){
+  const l = state.logs[i];
+  openModal('编辑场记（LogEditorWindow）', `
+    <div class="m-field"><label>文件</label><input value="${l.f}" disabled></div>
+    <div class="m-field"><label>TkNote</label><input id="m-tkn" value="${l.note||''}"></div>
+    <div class="m-field"><label>ShtNote</label><input id="m-shtn" value="${l.sht}"></div>
+    <div class="m-field"><label>ScnNote</label><input id="m-scnn" value="${l.scn}"></div>
+    <div class="m-field"><label>声音评价</label><select id="m-tkst"><option value="na">NotChecked</option><option value="ok">Ok</option><option value="bad">Bad</option></select></div>`,
+    ()=>{ l.note=$('#m-tkn').value; l.tkSt=$('#m-tkst').value; renderLogs(); });
+  $('#m-tkst').value = l.tkSt;
+}
+function delLog(i){ state.logs.splice(i,1); renderLogs(); renderDates(); renderWheels(); }
+
+/* ============ 设置页 ============ */
+function toggleLink(el){ state.isLinked=!state.isLinked; el.classList.toggle('on', state.isLinked); }
+$('#set-custom').oninput = e=>{ state.customPrefix=e.target.value; if(state.prefixMode==='custom'){ state.prefix=state.customPrefix||'CUST'; renderWheels(); } };
+$('#set-prefix').onchange = e=>{
+  state.prefixMode=e.target.value;
+  $('#set-custom').disabled = state.prefixMode!=='custom';
+  const d=new Date();
+  if(state.prefixMode==='date') state.prefix='260821';
+  else if(state.prefixMode==='snd') state.prefix='26Y21M8';
+  else state.prefix=state.customPrefix||'CUST';
+  renderWheels();
+};
+$('#set-linker').oninput = e=>{ state.linker=e.target.value||'-T'; renderWheels(); };
+function confirmClear(){ if(confirm('清空所有场记？（不可逆，注意 F3：清空后 picker_history 仍残留——复刻原行为）')){ state.logs=[]; renderLogs(); renderDates(); renderWheels(); } }
+
+/* ============ 初始化 ============ */
+seedLogs();
+renderWheels(); renderDial(); renderPlan(); renderLogs(); renderDates();
+</script>
+</body>
+</html>
