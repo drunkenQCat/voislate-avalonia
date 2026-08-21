@@ -64,9 +64,24 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private object? _currentPage;
 
-    /// <summary>当前页导航键（C 的左侧导航高亮 PageKeyToBrushConverter 消费）。</summary>
+    /// <summary>当前页导航键（底部导航高亮 PageKeyToBrushConverter 消费）。</summary>
     [ObservableProperty]
     private string _currentPageKey = string.Empty;
+
+    /// <summary>设置页进入前的页键（设置页返回目标；默认记录页）。</summary>
+    private string _lastPageKey = RecordPageKey;
+
+    /// <summary>是否显示底部导航（设置页全屏时隐藏，对齐原版 push 语义）。</summary>
+    public bool IsTabBarVisible => CurrentPageKey != SettingsPageKey;
+
+    /// <summary>是否显示顶部 AppBar（设置页自带返回头部，隐藏全局 AppBar）。</summary>
+    public bool IsAppBarVisible => CurrentPageKey != SettingsPageKey;
+
+    partial void OnCurrentPageKeyChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsTabBarVisible));
+        OnPropertyChanged(nameof(IsAppBarVisible));
+    }
 
     [RelayCommand]
     private void Navigate(string? key)
@@ -76,9 +91,18 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        if (CurrentPageKey != SettingsPageKey && key != SettingsPageKey)
+        {
+            _lastPageKey = CurrentPageKey;
+        }
+
         CurrentPage = page.Factory is null ? page.Instance : page.Factory();
         CurrentPageKey = key;
     }
+
+    /// <summary>设置页返回（回进入前页面）。</summary>
+    [RelayCommand]
+    private void GoBack() => Navigate(_lastPageKey);
 
     private object Resolve(string key) => _byKey[key].Resolve();
 }

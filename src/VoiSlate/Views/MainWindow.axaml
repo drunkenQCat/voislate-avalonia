@@ -4,67 +4,105 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:VoiSlate.ViewModels"
         xmlns:views="using:VoiSlate.Views"
-        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        mc:Ignorable="d" d:DesignWidth="430" d:DesignHeight="800"
         x:Class="VoiSlate.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="VoiSlate"
-        Width="1280" Height="800"
-        WindowStartupLocation="CenterScreen">
+        Width="430" Height="800"
+        WindowStartupLocation="CenterScreen"
+        Background="#12161B">
 
   <!--
-    Agent C：主窗口导航壳（契约 §6）。
-    左侧导航（记录/计划/场记/设置）+ ContentControl ↔ MainViewModel.CurrentPage；
-    VM→View 映射 DataTemplate 注册在 App.axaml 资源。
+    复刻目标：voislate-html/ 之 .stage/.phone（手机壳 390×860 + 7px #161C22 边框 + 42px 圆角）。
+    布局规范见 docs/ui-layout-spec.md §1.5/§2。
+    结构性事实（对应 HTML index.html）：
+      * AppBar 40px：#266489，左标题「VoiSlate」，右上 40×40 设置齿轮（settings_configue_page.dart 入口）；
+      * 机身 #F7F7F7，AppBar 与底部导航之间为 ContentControl ↔ CurrentPage（VM→View DataTemplate 在 App.axaml）；
+      * 底部导航 3 Tab（计划/记录/场记 —— 识别测试页按迁移清单不迁移）：
+        样式在 HTML 复刻中为零样式（自由实现），仅顺序/图标/初始 select=记录 为硬约束；
+      * 设置页为全屏页：进入时隐藏 AppBar 与底部导航（IsAppBarVisible/IsTabBarVisible），
+        设置页自带返回头（App.axaml.cs#CreateAndroidMainView 同构镜像）。
+    展示适配：1280×800 桌面屏放不下 874px 手机壳，做 0.88 等比 LayoutTransform（产品布局不变）。
   -->
   <Window.Resources>
     <views:PageKeyToBrushConverter x:Key="PageKeyBrush" />
   </Window.Resources>
 
-  <Grid ColumnDefinitions="190,*">
-    <!-- 左侧导航 -->
-    <Border Grid.Column="0" Background="#F4F4F4" BorderBrush="#DDDDDD" BorderThickness="0,0,1,0">
-      <DockPanel>
-        <TextBlock DockPanel.Dock="Top" Text="VoiSlate" FontSize="24" FontWeight="Bold"
-                   Margin="20,24,20,20" Foreground="#0067A0" />
-        <StackPanel Spacing="4" Margin="10,0">
-          <Button Command="{Binding NavigateCommand}" CommandParameter="Record"
-                  HorizontalContentAlignment="Stretch" Padding="10,8"
-                  Background="{Binding CurrentPageKey, Converter={StaticResource PageKeyBrush}, ConverterParameter=Record}">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <PathIcon Data="M12,14C13.66,14 15,12.66 15,11V5C15,3.34 13.66,2 12,2C10.34,2 9,3.34 9,5V11C9,12.66 10.34,14 12,14Z M18,11C18,14.53 15.06,17.44 11.53,17.5C8.08,17.56 5,14.93 5,11H3.13C3.13,14.66 6.31,17.66 10,17.9V21H14V17.9C17.69,17.66 20.87,14.66 20.87,11H18Z" Width="18" Height="18" />
-              <TextBlock Text="记录" FontSize="15" />
-            </StackPanel>
-          </Button>
-          <Button Command="{Binding NavigateCommand}" CommandParameter="Schedule"
-                  HorizontalContentAlignment="Stretch" Padding="10,8"
-                  Background="{Binding CurrentPageKey, Converter={StaticResource PageKeyBrush}, ConverterParameter=Schedule}">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <PathIcon Data="M19,4H18V2H16V4H8V2H6V4H5C3.9,4 3,4.9 3,6V20C3,21.1 3.9,22 5,22H19C20.1,22 21,21.1 21,20V6C21,4.9 20.1,4 19,4Z M19,20H5V9H19V20Z" Width="18" Height="18" />
-              <TextBlock Text="计划" FontSize="15" />
-            </StackPanel>
-          </Button>
-          <Button Command="{Binding NavigateCommand}" CommandParameter="SlateLog"
-                  HorizontalContentAlignment="Stretch" Padding="10,8"
-                  Background="{Binding CurrentPageKey, Converter={StaticResource PageKeyBrush}, ConverterParameter=SlateLog}">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <PathIcon Data="M3,13H11V11H3Z M3,17H11V15H3Z M3,9H11V7H3Z M13,13H21V11H13Z M13,17H21V15H13Z M13,9H21V7H13Z" Width="18" Height="18" />
-              <TextBlock Text="场记" FontSize="15" />
-            </StackPanel>
-          </Button>
-          <Button Command="{Binding NavigateCommand}" CommandParameter="Settings"
-                  HorizontalContentAlignment="Stretch" Padding="10,8"
-                  Background="{Binding CurrentPageKey, Converter={StaticResource PageKeyBrush}, ConverterParameter=Settings}">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <PathIcon Data="M19.43,12.98C19.47,12.66 19.5,12.34 19.5,12C19.5,11.66 19.47,11.34 19.43,11.02L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.97 19.05,5.05L16.56,6.05C16.04,5.66 15.48,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2L10,2C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.52,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.97 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11.02C4.53,11.34 4.5,11.66 4.5,12C4.5,12.34 4.53,12.66 4.57,12.98L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.95C7.96,18.34 8.52,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22L14,22C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.48,18.68 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63Z M12,15.5C10.07,15.5 8.5,13.93 8.5,12C8.5,10.07 10.07,8.5 12,8.5C13.93,8.5 15.5,10.07 15.5,12C15.5,13.93 13.93,15.5 12,15.5Z" Width="18" Height="18" />
-              <TextBlock Text="设置" FontSize="15" />
-            </StackPanel>
-          </Button>
-        </StackPanel>
-      </DockPanel>
+  <Grid Background="#12161B">
+    <!-- 深色渐变近似 HTML body：radial-gradient(1200px 700px at 50% -10%, #2b3a4a, #12161b 70%) -->
+    <Border Background="#2B3A4A" Width="1200" Height="560" HorizontalAlignment="Center"
+            VerticalAlignment="Top" CornerRadius="0,0,600,600" Opacity="0.95" />
+
+    <!-- 手机壳：390×860 画布按 800 高屏等比缩放（874×0.87≈760）→ 固定 351×760，无运行时缩放 -->
+    <Border Width="351" Height="760" HorizontalAlignment="Center" VerticalAlignment="Center"
+            Background="#161C22" CornerRadius="37" Padding="6">
+
+      <Border Background="#F7F7F7" CornerRadius="30" ClipToBounds="True">
+        <Grid RowDefinitions="40,*,Auto">
+
+          <!-- ================= AppBar（main.dart AppBar，40px / #266489） ================= -->
+          <Border Grid.Row="0" Background="#266489" ZIndex="5" IsVisible="{Binding IsAppBarVisible}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="VoiSlate" FontSize="17" FontWeight="Medium" Foreground="White"
+                         Margin="10,0,0,0" VerticalAlignment="Center" />
+              <!-- 设置入口（右上角齿轮；打开全屏设置页） -->
+              <Button Grid.Column="1" Width="40" Height="40" Margin="0,0,2,0"
+                      Background="Transparent" Foreground="White"
+                      Command="{Binding NavigateCommand}" CommandParameter="Settings"
+                      HorizontalAlignment="Right" VerticalAlignment="Center"
+                      ToolTip.Tip="设置">
+                <PathIcon Data="M19.43,12.98C19.47,12.66 19.5,12.34 19.5,12C19.5,11.66 19.47,11.34 19.43,11.02L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.97 19.05,5.05L16.56,6.05C16.04,5.66 15.48,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2L10,2C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.52,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.97 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11.02C4.53,11.34 4.5,11.66 4.5,12C4.5,12.34 4.53,12.66 4.57,12.98L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.95C7.96,18.34 8.52,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22L14,22C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.48,18.68 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63ZM12,15.5C10.07,15.5 8.5,13.93 8.5,12C8.5,10.07 10.07,8.5 12,8.5C13.93,8.5 15.5,10.07 15.5,12C15.5,13.93 13.93,15.5 12,15.5Z"
+                          Width="20" Height="20" Foreground="White" />
+              </Button>
+            </Grid>
+          </Border>
+
+          <!-- 刘海（.phone::before，128×24 #161C22，下圆角 16） -->
+          <Border Width="111" Height="21" Background="#161C22" CornerRadius="0,0,14,14"
+                  HorizontalAlignment="Center" VerticalAlignment="Top" ZIndex="20" />
+
+          <!-- ================= 页面宿主（Content ↔ CurrentPage） ================= -->
+          <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" />
+
+          <!-- ================= 底部导航（3 Tab：计划 / 记录 / 场记） ================= -->
+          <Border Grid.Row="2" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0"
+                  ZIndex="30" IsVisible="{Binding IsTabBarVisible}">
+            <Grid ColumnDefinitions="*,*,*">
+              <Button Command="{Binding NavigateCommand}" CommandParameter="Schedule"
+                      Background="{Binding CurrentPageKey, Converter={StaticResource PageKeyBrush}, ConverterParameter=Schedule}"
+                      CornerRadius="10" Margin="5,3" Padding="0,3"
+                      ToolTip.Tip="计划">
+                <StackPanel>
+                  <PathIcon Data="M19,4H18V2H16V4H8V2H6V4H5C3.9,4 3,4.9 3,6V20C3,21.1 3.9,22 5,22H19C20.1,22 21,21.1 21,20V6C21,4.9 20.1,4 19,4ZM19,20H5V9H19V20Z"
+                            Width="20" Height="20" HorizontalAlignment="Center" />
+                  <TextBlock Text="计划" FontSize="11" HorizontalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Grid.Column="1" Command="{Binding NavigateCommand}" CommandParameter="Record"
+                      Background="{Binding CurrentPageKey, Converter={StaticResource PageKeyBrush}, ConverterParameter=Record}"
+                      CornerRadius="10" Margin="5,3" Padding="0,3"
+                      ToolTip.Tip="记录">
+                <StackPanel>
+                  <PathIcon Data="M12,14C13.66,14 15,12.66 15,11V5C15,3.34 13.66,2 12,2C10.34,2 9,3.34 9,5V11C9,12.66 10.34,14 12,14ZM18,11C18,14.53 15.06,17.44 11.53,17.5C8.08,17.56 5,14.93 5,11H3.13C3.13,14.66 6.31,17.66 10,17.9V21H14V17.9C17.69,17.66 20.87,14.66 20.87,11H18Z"
+                            Width="20" Height="20" HorizontalAlignment="Center" />
+                  <TextBlock Text="记录" FontSize="11" HorizontalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Grid.Column="2" Command="{Binding NavigateCommand}" CommandParameter="SlateLog"
+                      Background="{Binding CurrentPageKey, Converter={StaticResource PageKeyBrush}, ConverterParameter=SlateLog}"
+                      CornerRadius="10" Margin="5,3" Padding="0,3"
+                      ToolTip.Tip="场记">
+                <StackPanel>
+                  <PathIcon Data="M3,13H11V11H3ZM3,17H11V15H3ZM3,9H11V7H3ZM13,13H21V11H13ZM13,17H21V15H13ZM13,9H21V7H13Z"
+                            Width="20" Height="20" HorizontalAlignment="Center" />
+                  <TextBlock Text="场记" FontSize="11" HorizontalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </Grid>
+          </Border>
+
+        </Grid>
+      </Border>
     </Border>
-
-    <!-- 页面宿主：ContentControl ↔ CurrentPage；DataTemplate 见 App.axaml -->
-    <ContentControl Grid.Column="1" Content="{Binding CurrentPage}" />
   </Grid>
-
 </Window>

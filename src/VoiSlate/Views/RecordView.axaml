@@ -5,137 +5,306 @@
              xmlns:vm="using:VoiSlate.ViewModels"
              xmlns:models="using:VoiSlate.Models"
              xmlns:controls="using:VoiSlate.Controls"
-             mc:Ignorable="d" d:DesignWidth="1080" d:DesignHeight="720"
+             mc:Ignorable="d" d:DesignWidth="390" d:DesignHeight="820"
              x:Class="VoiSlate.Views.RecordView"
              x:DataType="vm:RecordViewModel">
 
   <!--
-    Agent C：记录页（契约 §6 RecordView 组合，对齐 record_page.dart 结构意图）。
-    三列 SlateWheel（契约 §5 控件；D 合入前为 Controls/ 占位）+ FileCounter + SlideConfirmBar +
-    DialFAB×2 + 场镜次数字卡 + 当前文件号卡 + 上一拍备注编辑 + 场记速览对话框（sublist(40)）。
+    复刻目标：voislate-html 之 page-record（.record-scroll 内顺序与数值全部对照
+    docs/ui-layout-spec.md §3：notecard → tile(NEXT) → divider → add-row →
+    divider → mini-row → input-area(fields+joystick) → controls(FAB 组)）。
+    交互映射（HTML app.js ↔ Avalonia）：
+      * btn-add 单击 = 添加场记（AdvanceTake Normal）；btn-fake = 假拍（Fake）；
+      * btn-dec 600ms 长按 = 撤回（RewindTake）；btn-save = 收工（End，B11 shotEndBtn）；
+      * joystick 拖到左右 12.5px（25% 行程）阈值 → "语音识别演示"填充两个 textarea；
+      * monitor-card 600ms 长按 = 修改当前镜（协议占位 → SmallEditDialog）；
+      * lock-switch 触控/锁定 = lockable 区灰度禁用。
   -->
   <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{x:Null}">
-    <Grid RowDefinitions="Auto,Auto,200,Auto,Auto,Auto" Margin="20" ColumnDefinitions="*">
+    <StackPanel Margin="14,16,14,26">
 
-      <!-- 状态卡：场镜次数 + 当前文件号（current_take_monitor / current_file_monitor 语义） -->
-      <Grid Grid.Row="0" ColumnDefinitions="*,12,*" Margin="0,0,0,12">
-        <Border Grid.Column="0" Background="#F2F5DE" CornerRadius="10" Padding="14">
-          <StackPanel Spacing="4">
-            <TextBlock Text="当前场 / 镜 / 次" FontSize="13" Foreground="#666666" />
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <TextBlock FontSize="24" FontWeight="Bold">
-                <Run Text="{Binding SceneCol.SelectedItem}" /><Run Text=" 场" />
-              </TextBlock>
-              <TextBlock FontSize="24" FontWeight="Bold" Foreground="#0067A0">
-                <Run Text="{Binding ShotCol.SelectedItem}" /><Run Text=" 镜" />
-              </TextBlock>
-              <TextBlock FontSize="24" FontWeight="Bold" Foreground="#B8860B">
-                <Run Text="{Binding TakeCol.SelectedItem}" /><Run Text=" 次" />
-              </TextBlock>
+      <!-- ================= notecard：场 / 镜 / 次 数码卡 + 当前文件号 ================= -->
+      <Border Background="#F2F5DE" CornerRadius="12" Padding="12,10" BoxShadow="0 4 12 0 #2E000000">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6">
+            <StackPanel Width="108">
+              <Border Background="#A07C6A0A" CornerRadius="12" Padding="8,4" MinHeight="54">
+                <TextBlock Text="{Binding SceneCol.SelectedItem}" FontSize="40" FontWeight="Medium"
+                           FontFamily="Roboto,Segoe UI" Foreground="Black" HorizontalAlignment="Center" LineHeight="44" />
+              </Border>
+              <TextBlock Text="场" FontSize="18" Foreground="#212121" HorizontalAlignment="Center" Margin="0,4,0,0" />
+            </StackPanel>
+            <StackPanel Width="108">
+              <Border Background="#A07C6A0A" CornerRadius="12" Padding="8,4" MinHeight="54">
+                <TextBlock Text="{Binding ShotCol.SelectedItem}" FontSize="40" FontWeight="Medium"
+                           FontFamily="Roboto,Segoe UI" Foreground="Black" HorizontalAlignment="Center" LineHeight="44" />
+              </Border>
+              <TextBlock Text="镜" FontSize="18" Foreground="#212121" HorizontalAlignment="Center" Margin="0,4,0,0" />
+            </StackPanel>
+            <StackPanel Width="108">
+              <Border Background="#A07C6A0A" CornerRadius="12" Padding="8,4" MinHeight="54">
+                <TextBlock Text="{Binding TakeCol.SelectedItem}" FontSize="40" FontWeight="Medium"
+                           FontFamily="Roboto,Segoe UI" Foreground="Black" HorizontalAlignment="Center" LineHeight="44" />
+              </Border>
+              <TextBlock Text="次" FontSize="18" Foreground="#212121" HorizontalAlignment="Center" Margin="0,4,0,0" />
             </StackPanel>
           </StackPanel>
-        </Border>
-        <Border Grid.Column="2" Background="#EEF3F8" CornerRadius="10" Padding="14">
-          <StackPanel Spacing="4">
-            <TextBlock Text="当前文件号（B7：与记录计数同步，编辑走 ITakeFlowService）" FontSize="13" Foreground="#666666" />
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="{Binding PrefixText}" FontSize="24" FontWeight="Bold" />
-              <TextBlock Text="{Binding LinkerText}" FontSize="24" Foreground="#888888" />
-              <TextBlock Text="{Binding NumberText}" FontSize="24" FontWeight="Bold" Foreground="#0067A0" />
+          <!-- file-monitor：红点 ● + 当前文件号 -->
+          <Border Background="White" CornerRadius="12" Padding="8,8" Margin="0,10,0,0" BoxShadow="0 1 3 0 #1F000000">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="13">
+              <Border Width="19" Height="19" CornerRadius="9.5" Background="#F44336" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding CurrentFileNumber}" FontSize="20" FontWeight="Medium"
+                         FontFamily="Roboto,Segoe UI" Foreground="Black" />
             </StackPanel>
-            <TextBlock Text="补录模式：已联动（Take 号 = 文件号）" FontSize="12" Foreground="#2E7D32" IsVisible="{Binding IsLinked}" />
-            <TextBlock Text="补录模式：补录中（Take 号与文件号解绑 → Wild 条）" FontSize="12" Foreground="#C62828" IsVisible="{Binding !IsLinked}" />
-          </StackPanel>
-        </Border>
-      </Grid>
-
-      <!-- 三列滚轮（Scene / Shot / Take） -->
-      <Grid Grid.Row="1" ColumnDefinitions="*,6,*,6,*" Margin="0,0,0,12">
-        <Border Grid.Column="0" BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="8" Padding="6">
-          <DockPanel>
-            <TextBlock DockPanel.Dock="Top" Text="场 Scene" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,4,0,4" />
-            <controls:SlateWheel Items="{Binding SceneCol.Items}" SelectedIndex="{Binding SceneCol.SelectedIndex, Mode=TwoWay}" ItemHeight="44" />
-          </DockPanel>
-        </Border>
-        <Border Grid.Column="2" BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="8" Padding="6">
-          <DockPanel>
-            <TextBlock DockPanel.Dock="Top" Text="镜 Shot" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,4,0,4" />
-            <controls:SlateWheel Items="{Binding ShotCol.Items}" SelectedIndex="{Binding ShotCol.SelectedIndex, Mode=TwoWay}" ItemHeight="44" />
-          </DockPanel>
-        </Border>
-        <Border Grid.Column="4" BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="8" Padding="6">
-          <DockPanel>
-            <TextBlock DockPanel.Dock="Top" Text="次 Take（1..200，N2）" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,4,0,4" />
-            <controls:SlateWheel Items="{Binding TakeCol.Items}" SelectedIndex="{Binding TakeCol.SelectedIndex, Mode=TwoWay}" ItemHeight="44" />
-          </DockPanel>
-        </Border>
-      </Grid>
-
-      <!-- 文件号卡片 + 补录联动（FileCounter；EditRequested → 视图对话框 → ITakeFlowService） -->
-      <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-        <controls:FileCounter x:Name="FileCounterCtl"
-                              Prefix="{Binding PrefixText, Mode=TwoWay}"
-                              Linker="{Binding LinkerText, Mode=TwoWay}"
-                              NumberText="{Binding NumberText, Mode=TwoWay}" />
-        <Button Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0" Padding="14,10"
-                Command="{Binding ToggleLinkCommand}">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <TextBlock Text="补录联动" FontSize="14" />
-            <TextBlock Text="✓ 已联动" FontSize="13" Foreground="#2E7D32" IsVisible="{Binding IsLinked}" />
-            <TextBlock Text="✗ 补录中" FontSize="13" Foreground="#C62828" IsVisible="{Binding !IsLinked}" />
-          </StackPanel>
-        </Button>
-      </Grid>
-
-      <!-- 上一拍备注编辑（prev_note_editor 语义：PreviewHint + DescText/ShotNoteText TwoWay） -->
-      <Border Grid.Row="3" BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,12">
-        <Grid ColumnDefinitions="*,12,*">
-          <StackPanel Grid.Column="0" Spacing="4">
-            <TextBlock Text="录音标注 (Tk Note / Description)" FontSize="13" FontWeight="Bold" />
-            <TextBlock Text="{Binding PreviewHint}" FontSize="12" Foreground="#888888" TextWrapping="Wrap" MinHeight="30" />
-            <TextBox Text="{Binding DescText, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56" />
-          </StackPanel>
-          <StackPanel Grid.Column="2" Spacing="4">
-            <TextBlock Text="镜头标注 (Shot Note)" FontSize="13" FontWeight="Bold" />
-            <TextBlock Text="麦克风对象以 &lt;主体/&gt; 追加（示例：&lt;Boom/&gt;；MicObjectsExtractor 解析）" FontSize="12" Foreground="#888888" TextWrapping="Wrap" />
-            <TextBox Text="{Binding ShotNoteText, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56" />
-          </StackPanel>
-        </Grid>
+          </Border>
+        </StackPanel>
       </Border>
 
-      <!-- 滑动确认条（SlideConfirmBar：TextLeft/TextRight TwoWay ↔ DescText/ShotNoteText） -->
-      <controls:SlideConfirmBar Grid.Row="4" x:Name="SlideBar" Margin="0,0,0,12"
-                                TextLeft="{Binding DescText, Mode=TwoWay}"
-                                TextRight="{Binding ShotNoteText, Mode=TwoWay}"
-                                Transcription="{Binding AsrStatus}"
-                                IsRecording="{Binding IsRecording}"
-                                RecordDuration="00:00" />
+      <!-- ================= NEXT ExpansionTile（下一拍监控） ================= -->
+      <Border Background="White" CornerRadius="12" Margin="0,16,0,0" BoxShadow="0 1 3 0 #29000000"
+              ClipToBounds="True">
+        <StackPanel>
+          <Button x:Name="NextHead" Background="Transparent" Padding="12,12" HorizontalContentAlignment="Stretch">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Data="M8,5L19,12L8,19Z" Width="18" Height="18" Foreground="#2196F3" />
+                <TextBlock x:Name="NextLabel" Text="NEXT" FontSize="15" FontWeight="Medium" Foreground="Black"
+                           VerticalAlignment="Center" />
+                <PathIcon Data="M6,18L14,18L14,6L6,6L6,18ZM2,21L11,16L2,11L2,21ZM20,16L29,16L29,6" Width="18" Height="18"
+                          Foreground="#2196F3" VerticalAlignment="Center" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                <!-- 收起态：迷你滚轮预览 120×42（静态数字） -->
+                <Border x:Name="PreviewWheels" Width="120" Height="42" CornerRadius="8" Background="#F0F0F0"
+                        VerticalAlignment="Center" ClipToBounds="True">
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock x:Name="PreviewScn" Text="1A" FontSize="14" FontWeight="600" Foreground="#222" />
+                    <TextBlock x:Name="PreviewSht" Text="1A" FontSize="14" FontWeight="600" Foreground="#222" />
+                    <TextBlock x:Name="PreviewTk" Text="001" FontSize="14" FontWeight="600" Foreground="#222" />
+                  </StackPanel>
+                </Border>
+                <!-- 展开态：下一拍文字 -->
+                <TextBlock x:Name="NextText" Text="" FontSize="13" Foreground="#333" VerticalAlignment="Center"
+                           IsVisible="False" />
+                <PathIcon x:Name="Chev" Data="M7,10L12,15L17,10" Width="20" Height="20" Foreground="#666"
+                          VerticalAlignment="Center" />
+              </StackPanel>
+            </Grid>
+          </Button>
 
-      <!-- 操作行：记条/假拍/收工/撤回 + DialFAB×2 + 速览 + Mock ASR -->
-      <Grid Grid.Row="5" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,4,0,8">
-        <Button Content="▲ 记一条" MinWidth="92" Padding="14,10" FontWeight="Bold"
-                Command="{Binding AdvanceTakeCommand}" CommandParameter="{x:Static models:TakeType.Normal}" />
-        <Button Grid.Column="1" Content="假拍 Fake" Margin="8,0,0,0" Padding="14,10" Foreground="#C62828"
-                ToolTip.Tip="假拍条：tk=999、okTk=bad、tkNote='Fake Take'（B4）"
-                Command="{Binding AdvanceTakeCommand}" CommandParameter="{x:Static models:TakeType.Fake}" />
-        <Button Grid.Column="2" Content="收工 End" Margin="8,0,0,0" Padding="14,10" Foreground="#2E7D32"
-                ToolTip.Tip="收工：不递增文件号，history 记 'OK'（B2）"
-                Command="{Binding AdvanceTakeCommand}" CommandParameter="{x:Static models:TakeType.End}" />
-        <Button Grid.Column="3" Content="⟲ 撤回上一条" Margin="8,0,0,0" Padding="14,10"
-                ToolTip.Tip="重按撤回上一条场记（B11）"
-                Command="{Binding RewindTakeCommand}" />
-        <controls:DialFAB Grid.Column="4" x:Name="TkDial" Margin="10,0,0,0"
-                          ToolTip.Tip="声音评价：可(ok) / 弃(bad)" />
-        <controls:DialFAB Grid.Column="5" x:Name="ShtDial" Margin="10,0,0,0"
-                          ToolTip.Tip="画面评价：保(ok) / 过(nice)" />
-        <Button Grid.Column="6" x:Name="QuickViewButton" Content="速览" Margin="10,0,0,0" Padding="14,10"
-                ToolTip.Tip="场记速览（fileName → 录音标注；sublist(40) 已知行为）" />
-        <Button Grid.Column="7" Content="Mock ASR" Margin="10,0,0,0" Padding="14,10"
-                ToolTip.Tip="模拟语音识别开关（ifly 由 Mock 替代）"
-                Command="{Binding ToggleAsrCommand}" />
+          <!-- tile-body -->
+          <Border x:Name="NextBody" Background="#F5F5F5" BorderBrush="#EEEEEE" BorderThickness="0,1,0,0"
+                  IsVisible="False">
+            <StackPanel Margin="8,10,10,12">
+
+              <!-- link-pill 补录/联动切换 -->
+              <Grid>
+                <Button x:Name="LinkPill" Width="34" Height="58" Background="#D9FFFFFF" CornerRadius="10"
+                        HorizontalAlignment="Left" VerticalAlignment="Top" ZIndex="5"
+                        Padding="0"
+                        Command="{Binding ToggleLinkCommand}"
+                        ToolTip.Tip="补录模式：Take 号与文件号解绑">
+                  <TextBlock x:Name="LinkPillIcon" Text="🔗" FontSize="16" />
+                </Button>
+
+                <!-- monitor-card（长按 600ms = 修改当前镜） -->
+                <Border x:Name="MonitorCard" Background="White" CornerRadius="12" Padding="6,6,6,6"
+                        BoxShadow="0 3 10 0 #33000000">
+                  <StackPanel>
+                    <Grid>
+                      <!-- next-col：左侧竖排"下一条" -->
+                      <StackPanel Width="26" HorizontalAlignment="Left" VerticalAlignment="Center" Spacing="0"
+                                  ZIndex="3" IsHitTestVisible="False">
+                        <PathIcon Data="M13,3H11V13H13V3ZM22.5,9.5L14,18L11.5,15.5L7.5,19.5L3.5,15.5V21H19.5V0" Width="16" Height="16" Foreground="#2196F3" />
+                        <TextBlock Text="下" FontSize="11" Foreground="#2196F3" LineHeight="13" />
+                        <TextBlock Text="一" FontSize="11" Foreground="#2196F3" LineHeight="13" />
+                        <TextBlock Text="条" FontSize="11" Foreground="#2196F3" LineHeight="13" />
+                      </StackPanel>
+                      <!-- 三列滚轮（96 宽 / 112 高 / 行高 50） -->
+                      <Grid ColumnDefinitions="96,1,96,1,96" HorizontalAlignment="Center">
+                        <Border Grid.Column="0" Width="96" Height="112" Background="#F6F1FF">
+                          <controls:SlateWheel Items="{Binding SceneCol.Items}"
+                                               SelectedIndex="{Binding SceneCol.SelectedIndex, Mode=TwoWay}"
+                                               ItemHeight="50" />
+                        </Border>
+                        <Border Grid.Column="1" Width="1" Background="#BDBDBD" Margin="0,14,0,14" />
+                        <Border Grid.Column="2" Width="96" Height="112" Background="#F6F1FF">
+                          <controls:SlateWheel Items="{Binding ShotCol.Items}"
+                                               SelectedIndex="{Binding ShotCol.SelectedIndex, Mode=TwoWay}"
+                                               ItemHeight="50" />
+                        </Border>
+                        <Border Grid.Column="3" Width="1" Background="#BDBDBD" Margin="0,14,0,14" />
+                        <Border Grid.Column="4" Width="96" Height="112" Background="#F6F1FF">
+                          <controls:SlateWheel Items="{Binding TakeCol.Items}"
+                                               SelectedIndex="{Binding TakeCol.SelectedIndex, Mode=TwoWay}"
+                                               ItemHeight="50" />
+                        </Border>
+                      </Grid>
+                    </Grid>
+                    <TextBlock x:Name="ShotHint" Text="长按修改当前镜" FontSize="11" Foreground="#C62828"
+                               Padding="2,2,0,2" IsVisible="False" HorizontalAlignment="Center" />
+
+                    <!-- filecounter 三卡片 -->
+                    <Border Background="#CFD8DC" CornerRadius="12" Margin="10,6,4,0" Padding="8,7"
+                            BorderBrush="#0D000000" BorderThickness="1">
+                      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+                        <StackPanel Spacing="3">
+                          <TextBlock Text="Date" FontSize="11" Foreground="#666" HorizontalAlignment="Center" />
+                          <Border Background="White" CornerRadius="4" Padding="6,2" BoxShadow="0 2 5 0 #47000000"
+                                  Tag="Prefix" PointerPressed="OnFcCardPressed" Cursor="Hand" ToolTip.Tip="编辑前缀模式">
+                            <TextBlock x:Name="FcPrefix" Text="{Binding PrefixText}" FontSize="24" FontFamily="Roboto,Segoe UI" Foreground="#222" />
+                          </Border>
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                          <TextBlock Text="Divider" FontSize="11" Foreground="#666" HorizontalAlignment="Center" />
+                          <Border Background="White" CornerRadius="4" Padding="6,2" BoxShadow="0 2 5 0 #47000000"
+                                  Tag="Linker" PointerPressed="OnFcCardPressed" Cursor="Hand" ToolTip.Tip="编辑链接符">
+                            <TextBlock x:Name="FcLinker" Text="{Binding LinkerText}" FontSize="25" FontWeight="Normal" Foreground="#80808080" />
+                          </Border>
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                          <TextBlock Text="Num" FontSize="11" Foreground="#666" HorizontalAlignment="Center" />
+                          <Border Background="White" CornerRadius="7" Padding="6,2" BoxShadow="0 2 5 0 #47000000"
+                                  Tag="Number" PointerPressed="OnFcCardPressed" Cursor="Hand" ToolTip.Tip="编辑文件号">
+                            <TextBlock x:Name="FcNum" Text="{Binding NextFileNumber}" FontSize="24" FontFamily="Roboto,Segoe UI" Foreground="#222" />
+                          </Border>
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </StackPanel>
+                </Border>
+              </Grid>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <Border Height="1" Background="#E0E0E0" Margin="0,14,0,0" />
+
+      <!-- ================= add-row：添加场记 + Fake Take ================= -->
+      <Grid Margin="0,10,0,0">
+        <Button x:Name="BtnAdd" Height="58" Background="#63326E" Foreground="White" CornerRadius="8"
+                FontSize="26" Content="＋" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                Command="{Binding AdvanceTakeCommand}" CommandParameter="{x:Static models:TakeType.Normal}"
+                ToolTip.Tip="添加场记（文件号 +1）" />
+        <Button x:Name="BtnFake" Width="46" Height="46" CornerRadius="23" Background="#291711"
+                HorizontalAlignment="Left" Margin="20,0,0,0" VerticalAlignment="Center" Padding="0"
+                FontSize="20" Foreground="#F44336" Content="⤓"
+                Command="{Binding AdvanceTakeCommand}" CommandParameter="{x:Static models:TakeType.Fake}"
+                ToolTip.Tip="假拍（Fake Take：tk=999、okTk=bad、tkNote='Fake Take'）" />
       </Grid>
 
-    </Grid>
-  </ScrollViewer>
+      <Border Height="1" Background="#E0E0E0" Margin="0,10,0,0" />
 
+      <!-- ================= mini-row：撤回（长按 600ms）/ 保存（镜头结束） ================= -->
+      <Grid Margin="0,12,0,0" ColumnDefinitions="Auto,Auto" ColumnSpacing="48" HorizontalAlignment="Center">
+        <Button x:Name="BtnDec" Width="92" Height="50" CornerRadius="8" Background="#E9EDF1" Padding="0"
+                FontSize="22" Foreground="#F44336" Content="−"
+                ToolTip.Tip="长按 600ms：撤回上一条场记" />
+        <Button Grid.Column="1" Width="92" Height="50" CornerRadius="8" Background="#E9EDF1" Padding="0"
+                FontSize="22" Foreground="#4CAF50" Content="✓"
+                Command="{Binding AdvanceTakeCommand}" CommandParameter="{x:Static models:TakeType.End}"
+                ToolTip.Tip="镜头结束（收工：不递增文件号，history 记 OK）" />
+      </Grid>
+
+      <!-- ================= input-area：双备注 + RecorderJoystick（悬浮两栏之间） ================= -->
+      <Grid Margin="0,14,0,0">
+        <Grid ColumnDefinitions="*,8,*">
+          <!-- 左：录音标注 -->
+          <StackPanel Grid.Column="0">
+            <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,0,0,4">
+              <Border Width="19" Height="19" CornerRadius="9.5" Background="#F44336" VerticalAlignment="Center" />
+              <TextBlock x:Name="RecTitle" Text="正在录制:T001" FontSize="13.5" Foreground="#333" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBox x:Name="DescInput" Height="76" Text="{Binding DescText, Mode=TwoWay}"
+                     AcceptsReturn="True" TextWrapping="Wrap" FontSize="13"
+                     Watermark="{Binding PreviewHint}" Padding="8,6"
+                     BorderBrush="#BDBDBD" BorderThickness="1" CornerRadius="4" />
+          </StackPanel>
+          <!-- 右：镜头标注 -->
+          <StackPanel Grid.Column="2">
+            <StackPanel Orientation="Horizontal" Spacing="5" HorizontalAlignment="Right" Margin="0,0,0,4">
+              <TextBlock x:Name="ShtTitle" Text="S1A Sh1A Tk" FontSize="13.5" Foreground="#333" VerticalAlignment="Center" />
+              <Border x:Name="TkBadge" Background="#D9A7C182" CornerRadius="4" Padding="4,0" VerticalAlignment="Center">
+                <TextBlock x:Name="TkBadgeText" Text="1" FontSize="13" Foreground="#333" />
+              </Border>
+              <PathIcon Data="M12,12C14.21,12 16,10.21 16,8C16,5.79 14.21,4 12,4C9.79,4 8,5.79 8,8C8,10.21 9.79,12 12,12ZM12,14C9.33,14 4,15.34 4,18V20H20V18C20,15.34 14.67,14 12,14Z" Width="19" Height="19" Foreground="#4CAF50" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBox x:Name="NoteInput" Height="76" Text="{Binding ShotNoteText, Mode=TwoWay}"
+                     AcceptsReturn="True" TextWrapping="Wrap" FontSize="13"
+                     Watermark="Shot Note" Padding="8,6"
+                     BorderBrush="#BDBDBD" BorderThickness="1" CornerRadius="4" />
+          </StackPanel>
+        </Grid>
+
+        <!-- RecorderJoystick：120×70 红绿渐变盘 + 60px knob，常驻 0.8 缩放，悬浮两栏中间上方 -->
+        <Grid x:Name="JoyHost" ZIndex="6" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,26,0,0"
+              Width="96" Height="56" RenderTransformOrigin="0.5,0">
+          <Grid.RenderTransform>
+            <ScaleTransform ScaleX="0.8" ScaleY="0.8" />
+          </Grid.RenderTransform>
+          <Border x:Name="Joy" Width="120" Height="70" CornerRadius="35" Padding="5">
+            <Border.Background>
+              <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
+                <GradientStop Offset="0" Color="#EF9A9A" />
+                <GradientStop Offset="1" Color="#A5D6A7" />
+              </LinearGradientBrush>
+            </Border.Background>
+            <Grid>
+              <!-- 左右箭头（HTML joy-arrows：左位绿右箭头 → 右位红左箭头） -->
+              <Grid>
+                <PathIcon Data="M8,7L15,12L8,17Z" Width="20" Height="20" Foreground="#81C784"
+                          HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20,0,0,0" IsHitTestVisible="False" />
+                <PathIcon Data="M16,7L9,12L16,17Z" Width="20" Height="20" Foreground="#E57373"
+                          HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,20,0" IsHitTestVisible="False" />
+              </Grid>
+              <!-- knob：60×60 圆，可横向拖拽 5..55px -->
+              <Border x:Name="JoyKnob" Width="60" Height="60" CornerRadius="30" Background="#F3E5F5"
+                      HorizontalAlignment="Left" Margin="30,5,0,0" VerticalAlignment="Center"
+                      BoxShadow="0 2 8 0 #4D000000" Cursor="Hand">
+                <PathIcon Data="M12,14C13.66,14 15,12.66 15,11V5C15,3.34 13.66,2 12,2C10.34,2 9,3.34 9,5V11C9,12.66 10.34,14 12,14ZM18,11C18,14.53 15.06,17.44 11.53,17.5C8.08,17.56 5,14.93 5,11H3.13C3.13,14.66 6.31,17.66 10,17.9V21H14V17.9C17.69,17.66 20.87,14.66 20.87,11H18Z"
+                          Width="22" Height="22" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,3,0,0" />
+              </Border>
+            </Grid>
+          </Border>
+        </Grid>
+      </Grid>
+
+      <!-- ================= controls：速览 FAB + 声音/画面拨盘 + 触控/锁定 ================= -->
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,20,0,8" Spacing="26">
+        <Button x:Name="QuickViewButton" Width="56" Height="56" CornerRadius="28" Background="#8EB1C7" Padding="0"
+                ToolTip.Tip="显示场记速览">
+          <PathIcon Data="M21,15L15,15L15,21L13,21L13,15L7,15L7,13L13,13L13,7L15,7L15,13L21,13L21,15Z" Width="22" Height="22" Foreground="White" />
+        </Button>
+
+        <controls:DialFAB x:Name="TkDial" Width="56" Height="56" Margin="0,3,0,3"
+                          ToolTip.Tip="声音评价：可(ok) / 弃(bad)" />
+        <controls:DialFAB x:Name="ShtDial" Width="56" Height="56" Margin="0,3,0,3"
+                          ToolTip.Tip="画面评价：保(ok) / 过(nice)" />
+
+        <!-- lock-switch：触控 / 锁定 -->
+        <Border Background="White" BorderBrush="#2E000000" BorderThickness="1" CornerRadius="22"
+                Height="44" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal">
+            <Button x:Name="LockTouch" Width="52" Height="40" Padding="0" CornerRadius="20" Margin="1,1,0,1"
+                    Background="White" ToolTip.Tip="触控：滚轮/按钮可用">
+              <StackPanel Spacing="1">
+                <PathIcon Data="M12,17C10.89,17 10,16.1 10,15C10,13.89 10.89,13 12,13C13.11,13 14,13.89 14,15C14,16.1 13.11,17 12,17ZM18,8C19.1,8 20,8.9 20,10V20C20,21.1 19.1,22 18,22H6C4.9,22 4,21.1 4,20V10C4,8.9 4.9,8 6,8H7V6C7,3.24 9.24,1 12,1C14.76,1 17,3.24 17,6V8H18ZM15,8V6C15,4.34 13.66,3 12,3C10.34,3 9,4.34 9,6V8H15Z" Width="17" Height="17" Foreground="#212121" HorizontalAlignment="Center" />
+                <TextBlock Text="触控" FontSize="10" Foreground="#333" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button x:Name="LockLocked" Width="52" Height="40" Padding="0" CornerRadius="20" Margin="0,1,1,1"
+                    Background="Transparent" ToolTip.Tip="锁定：操作区灰度禁用">
+              <StackPanel Spacing="1">
+                <PathIcon Data="M18,8H17V6C17,3.24 14.76,1 12,1C9.24,1 7,3.24 7,6V8H6C4.9,8 4,8.9 4,10V20C4,21.1 4.9,22 6,22H18C19.1,22 20,21.1 20,20V10C20,8.9 19.1,8 18,8ZM12,17C10.89,17 10,16.1 10,15C10,13.89 10.89,13 12,13C13.11,13 14,13.89 14,15C14,16.1 13.11,17 12,17ZM15.1,8H8.9V6C8.9,4.29 10.29,2.9 12,2.9C13.71,2.9 15.1,4.29 15.1,6V8Z" Width="17" Height="17" Foreground="#777" HorizontalAlignment="Center" />
+                <TextBlock Text="锁定" FontSize="10" Foreground="#777" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <!-- lockable 区域（锁定态灰度禁用：add/mini/fields/拨盘/摇杆） -->
+    </StackPanel>
+  </ScrollViewer>
 </UserControl>

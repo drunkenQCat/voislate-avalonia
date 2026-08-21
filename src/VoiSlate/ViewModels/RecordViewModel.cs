@@ -131,6 +131,9 @@ public partial class RecordViewModel : ObservableObject, IDisposable
     /// <summary>当前文件名显示 = prefix + linker + 补零（对齐 CurrentFileMonitor。经 FileNumberChanged 更新）。</summary>
     public string CurrentFileNumber => $"{PrefixText}{LinkerText}{FileNumber:D3}";
 
+    /// <summary>下一个文件号（FileCounter 三卡片 Num 段：HTML 语义 pad3(recCount)）。</summary>
+    public string NextFileNumber => (FileNumber + 1).ToString("D3");
+
     /// <summary>录音状态（IAsrService.IsListening 镜像）。</summary>
     public bool IsRecording => _asr.IsListening;
 
@@ -138,6 +141,7 @@ public partial class RecordViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(NumberText));
         OnPropertyChanged(nameof(CurrentFileNumber));
+        OnPropertyChanged(nameof(NextFileNumber));
     }
 
     partial void OnPrefixTextChanged(string value) => OnPropertyChanged(nameof(CurrentFileNumber));
