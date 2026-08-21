@@ -18,7 +18,7 @@
   -->
   <Grid RowDefinitions="40,*">
     <!-- appbar.sub -->
-    <Border Grid.Row="0" Background="#1D4F6E" ZIndex="5">
+    <Border Grid.Row="0" Background="#1D4F6E" ZIndex="5" PointerPressed="OnHeaderPressed">
       <Grid ColumnDefinitions="40,*,40">
         <Button x:Name="BackButton" Grid.Column="0" Width="40" Height="40" Background="Transparent" Foreground="White" Padding="0"
                 HorizontalAlignment="Left" Click="OnBackClick"
@@ -76,8 +76,8 @@
           <Border Height="1" Background="#ECECEC" />
           <Button Content="清空今日场记" FontSize="15" Padding="0,13" MinHeight="48" CornerRadius="6"
                   HorizontalContentAlignment="Center" Foreground="#F44336" Background="Transparent"
-                  Command="{Binding ClearTodayCommand}"
-                  ToolTip.Tip="仅清今日日志，不动文件号/picker_history（F3 已知行为保留）" />
+                  Click="OnClearTodayClick"
+                  ToolTip.Tip="仅清今日日志，不动文件号/picker_history（F3 已知行为保留；经确认弹窗）" />
           <Border Height="1" Background="#ECECEC" />
           <Button Content="清空所有场记" FontSize="15" Padding="0,13" MinHeight="48" CornerRadius="6"
                   HorizontalContentAlignment="Center" Foreground="#F44336" Background="Transparent"
@@ -94,5 +94,23 @@
 
       </StackPanel>
     </ScrollViewer>
+
+    <!-- confirm overlay（§8.1/8.2：rgba(0,0,0,0.42) 蒙层 + 白 dialog 圆角 28；clearToday 文案对齐 CONFIRM_MAP） -->
+    <Grid x:Name="ConfirmOverlay" Grid.RowSpan="2" IsVisible="False" Background="#6B000000" ZIndex="50"
+          PointerPressed="OnOverlayPointerPressed">
+      <Border Background="White" CornerRadius="28" Padding="22,24,22,16" MaxWidth="320"
+              HorizontalAlignment="Center" VerticalAlignment="Center" BoxShadow="0 24 60 0 #66000000">
+        <StackPanel>
+          <TextBlock x:Name="ConfirmTitle" Text="清除场记" FontSize="21" FontWeight="Medium" Margin="0,0,0,12" />
+          <TextBlock x:Name="ConfirmBody" Text="是否确认要清除场记？" FontSize="14" Foreground="#444" LineHeight="22" TextWrapping="Wrap" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,18,0,0">
+            <Button Content="取消" FontSize="14" Padding="8,12" CornerRadius="6" Background="Transparent"
+                    Click="OnConfirmCancel" />
+            <Button x:Name="ConfirmOk" Content="确认" FontSize="14" Padding="8,12" CornerRadius="6"
+                    Background="Transparent" Foreground="#F44336" Click="OnConfirmOk" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
   </Grid>
 </UserControl>

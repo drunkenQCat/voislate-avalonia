@@ -21,7 +21,11 @@ public sealed class LiteDbStore : IDisposable
     {
         FilePath = connectionString;
         IsMemory = connectionString == ":memory:";
-        _db = new LiteDatabase(connectionString);
+        // LiteDB 对相同连接串（含 ":memory:"）会返回进程内共享实例——多个并行测试会互踩数据。
+        // 内存库改用独立 MemoryStream，保证每个 :memory: store 完全隔离（生产走文件库，行为不变）。
+        _db = IsMemory
+            ? new LiteDatabase(new MemoryStream())
+            : new LiteDatabase(connectionString);
     }
 
     /// <summary>应用数据目录下的默认库（macOS: ~/Library/Application Support/VoiSlate/voislate.db）。</summary>

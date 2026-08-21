@@ -6,6 +6,34 @@ using VoiSlate.Services;
 
 namespace VoiSlate.ViewModels;
 
+/// <summary>场记页两级分组：镜组（ExpansionTile 内层，标题 "Shot n"）。</summary>
+public sealed partial class LogShotGroup : ObservableObject
+{
+    public string Title { get; init; } = string.Empty;
+
+    /// <summary>分组键（条目 Sht 值）。</summary>
+    public string Tag { get; init; } = string.Empty;
+
+    public ObservableCollection<SlateLogItem> Items { get; } = [];
+
+    [ObservableProperty]
+    private bool _isOpen;
+}
+
+/// <summary>场记页两级分组：场组（ExpansionTile 外层，标题 "Scene n"；HTML 默认展开第 1 场组与其第 1 镜组）。</summary>
+public sealed partial class LogSceneGroup : ObservableObject
+{
+    public string Title { get; init; } = string.Empty;
+
+    /// <summary>分组键（条目 Scn 值）。</summary>
+    public string Tag { get; init; } = string.Empty;
+
+    public ObservableCollection<LogShotGroup> Shots { get; } = [];
+
+    [ObservableProperty]
+    private bool _isOpen;
+}
+
 /// <summary>
 /// 场记“今日”数据 VM（契约 §4 SlateLogViewModel；DI 单例）。
 /// 只读展示：订阅 ITakeFlowService.LogsChanged 刷新 TodayLogs/Dates；无公开持久化写 API——
@@ -33,6 +61,9 @@ public partial class SlateLogViewModel : ObservableObject, IDisposable
     public ObservableCollection<SlateLogItem> TodayLogs { get; } = [];
 
     public ObservableCollection<string> Dates { get; } = [];
+
+    /// <summary>当前日期两级分组（HTML renderLogs 语义：场组 Scene n / 镜组 Shot n / 条目；行色按 OkTk）。</summary>
+    public ObservableCollection<LogSceneGroup> Groups { get; } = [];
 
     /// <summary>今日（yyMMdd；跨天由调用方触发 LoadAsync 补偿）。</summary>
     [ObservableProperty]
@@ -77,6 +108,8 @@ public partial class SlateLogViewModel : ObservableObject, IDisposable
             {
                 TodayLogs.Add(item);
             }
+
+            RebuildGroups();
         }
         finally
         {
@@ -84,6 +117,37 @@ public partial class SlateLogViewModel : ObservableObject, IDisposable
         }
 
         ct.ThrowIfCancellationRequested();
+    }
+
+    /// <summary>按条目 Scn/Sht 重建两级分组（组标题按组内序号 Scene n / Shot n；默认展开第 1 场组与其第 1 镜组）。</summary>
+    private void RebuildGroups()
+    {
+        Groups.Clear();
+        LogSceneGroup? scnGroup = null;
+        LogShotGroup? shtGroup = null;
+        var scnOrdinal = 0;
+        var shtOrdinal = 0;
+        var firstSceneExpanded = false;
+
+        foreach (var item in TodayLogs)
+        {
+            if (scnGroup is null || scnGroup.Tag != item.Scn)
+            {
+                scnGroup = new LogSceneGroup { Title = $"Scene {++scnOrdinal}", Tag = item.Scn, IsOpen = !firstSceneExpanded };
+                firstSceneExpanded = true;
+                shtGroup = null;
+                shtOrdinal = 0;
+                Groups.Add(scnGroup);
+            }
+
+            if (shtGroup is null || shtGroup.Tag != item.Sht)
+            {
+                shtGroup = new LogShotGroup { Title = $"Shot {++shtOrdinal}", Tag = item.Sht, IsOpen = shtOrdinal == 1 };
+                scnGroup.Shots.Add(shtGroup);
+            }
+
+            shtGroup.Items.Add(item);
+        }
     }
 
     /// <summary>编辑请求（承载子编辑器 VM；View 仅负责托管 LogEditorWindow——构造器需 ITakeFlowService，故在 VM 内构建）。</summary>

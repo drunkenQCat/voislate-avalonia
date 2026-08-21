@@ -18,6 +18,9 @@ namespace VoiSlate;
 
 public partial class App : Application
 {
+    /// <summary>主 VM 静态引用（设置页返回等非窗口场景；Avalonia 12 窗口为 TopLevelHost，as Window 不再可靠）。</summary>
+    public static ViewModels.MainViewModel? Main { get; private set; }
+
     private ServiceProvider? _services;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
@@ -73,9 +76,11 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // Agent C：MainWindow 壳 + 契约 MainViewModel（stub 版；B 合入后替换 DI 注册即可）。
+            var mainViewModel = _services.GetRequiredService<MainViewModel>();
+            Main = mainViewModel;
             desktop.MainWindow = new MainWindow
             {
-                DataContext = _services.GetRequiredService<MainViewModel>(),
+                DataContext = mainViewModel,
             };
 
             // DI-REGISTRATION (C keep) — Agent C 接管 App.axaml.cs 时全量保留本区域。

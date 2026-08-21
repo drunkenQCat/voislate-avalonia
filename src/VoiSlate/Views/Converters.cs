@@ -1,4 +1,5 @@
 using System.Globalization;
+using Avalonia;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using VoiSlate.Models;
@@ -61,6 +62,78 @@ public sealed class PageKeyToBrushConverter : IValueConverter
             ? Palette.Solid("#220067A0")
             : Brushes.Transparent;
     }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+/// <summary>值 == ConverterParameter（字符串"Ok"/"Nice"/"NotChecked"/"1"…）→ true。用于图标/元素按枚举显隐。</summary>
+public sealed class EnumEqualsConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var v = value?.ToString();
+        var p = parameter?.ToString();
+        return string.Equals(v, p, StringComparison.Ordinal);
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>日期 Tab 高亮：值 == 参数（yyMMdd）→ #2196F3，否则 #222。供 .log-tab 前景与底部 3px 边。</summary>
+public sealed class TabForegroundConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        string.Equals(value?.ToString(), parameter?.ToString(), StringComparison.Ordinal)
+            ? new SolidColorBrush(Color.Parse("#2196F3"))
+            : new SolidColorBrush(Color.Parse("#222222"));
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>日期 Tab 下边框：值 == 参数 → 3px #2196F3，否则透明。配合 TabForegroundConverter。</summary>
+public sealed class TabBorderConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        string.Equals(value?.ToString(), parameter?.ToString(), StringComparison.Ordinal)
+            ? new Thickness(0, 0, 0, 3)
+            : new Thickness(0);
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>场记行底色（HTML TK_BG）：Ok→#4CAF50 / Bad→#F44336 / else→#9E9E9E（NotChecked 灰）。</summary>
+public sealed class TakeRowBrushConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value switch
+        {
+            TkStatus.Ok => new SolidColorBrush(Color.Parse("#4CAF50")),
+            TkStatus.Bad => new SolidColorBrush(Color.Parse("#F44336")),
+            _ => new SolidColorBrush(Color.Parse("#9E9E9E")),
+        };
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>字符串非空 → true（行内容按值显隐，HTML li-line 空项省略）。</summary>
+public sealed class StringHasValueConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        !string.IsNullOrWhiteSpace(value as string);
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>当前页键 == 参数 → true（底部导航高亮 pill 的 IsVisible；按钮自身保持静态背景保证可命中）。</summary>
+public sealed class PageKeyToBoolConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        string.Equals(value?.ToString(), parameter?.ToString(), StringComparison.Ordinal);
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();

@@ -5,81 +5,138 @@
              xmlns:vm="using:VoiSlate.ViewModels"
              xmlns:models="using:VoiSlate.Models"
              xmlns:views="using:VoiSlate.Views"
-             mc:Ignorable="d" d:DesignWidth="1080" d:DesignHeight="720"
+             mc:Ignorable="d" d:DesignWidth="390" d:DesignHeight="700"
              x:Class="VoiSlate.Views.SlateLogView"
              x:DataType="vm:SlateLogViewModel">
 
   <!--
-    Agent C：场记页（对齐 slate_log_tabs / slate_log_page 意图：日期切换 + 当日卡片列表）。
-    卡片：fileName + okTk/okSht 色点 + tkNote/shtNote；编辑经 LogEditorWindow（ITakeFlowService）；
-    删除经 DeleteCommand；导出为占位命令（待 IExportService）。
+    复刻目标：voislate-html 之 page-log（docs/ui-layout-spec.md §5）：
+      log-appbar 52px（左右 40×40 prev/next + 日期 Tab，active #2196F3 + 3px 下边）；
+      两级 ExpansionTile：场组 #e0e0e0（Scene n /「场」）、镜组 #eeeeee（Shot n /「镜」）；
+      默认展开第 1 场组与其第 1 镜组（LogSceneGroup.IsOpen 初值，RebuildGroups 控制）；
+      log-item 行底色按 OkTk 实色（绿 #4caf50 / 红 #f44336 / 灰 #9e9e9e）+ 深色文字；
+      行内容 fileName(Roboto) / TK Note / Shot Note / Scene Note；trail 图标按 OkSht。
+    Avalonia 增强：date tabs 数据真实（ILogRepository.GetDatesAsync）；双击 log-item → LogEditorWindow。
   -->
   <UserControl.Resources>
-    <views:TkStatusToBrushConverter x:Key="TkBrush" />
-    <views:ShtStatusToBrushConverter x:Key="ShtBrush" />
+    <views:TakeRowBrushConverter x:Key="TakeRowBrush" />
+    <views:StringHasValueConverter x:Key="HasValue" />
+    <views:EnumEqualsConverter x:Key="Eq" />
   </UserControl.Resources>
 
-  <Grid RowDefinitions="Auto,Auto,*" Margin="20">
-    <!-- 顶部：日期切换 + 导出 -->
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-      <StackPanel Orientation="Horizontal" Spacing="10">
-        <TextBlock Text="日期" VerticalAlignment="Center" Foreground="#666666" />
-        <ListBox ItemsSource="{Binding Dates}"
-                 SelectedItem="{Binding SelectedDate, Mode=TwoWay}"
-                 HorizontalAlignment="Left" MinWidth="80">
-          <ListBox.ItemsPanel>
-            <ItemsPanelTemplate>
-              <StackPanel Orientation="Horizontal" Spacing="6" />
-            </ItemsPanelTemplate>
-          </ListBox.ItemsPanel>
-        </ListBox>
-        <TextBlock Text="{Binding Today, StringFormat='今日：{0}'}" VerticalAlignment="Center"
-                   FontSize="12" Foreground="#0067A0" />
-      </StackPanel>
-      <Button Grid.Column="1" Content="导出 JSON" Command="{Binding ExportCommand}" VerticalAlignment="Center" />
-    </Grid>
+  <Grid RowDefinitions="52,*">
+    <!-- log-appbar -->
+    <Border Grid.Row="0" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" ZIndex="5">
+      <Grid ColumnDefinitions="40,*,40">
+        <Button x:Name="LogPrev" Grid.Column="0" Width="40" Height="40" Background="Transparent" Padding="0"
+                Click="OnPrevClick" ToolTip.Tip="前一天">
+          <PathIcon Data="M15.41,16.59L10.83,12L15.41,7.41L14,6L8,12L14,18Z" Width="20" Height="20" Foreground="#333" />
+        </Button>
 
-    <!-- 列表 -->
-    <ListBox Grid.Row="2" ItemsSource="{Binding TodayLogs}"
-             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="models:SlateLogItem">
-          <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="8"
-                  BorderBrush="#DDDDDD" BorderThickness="1">
-            <Grid ColumnDefinitions="*,Auto">
-              <StackPanel Grid.Column="0" Spacing="3">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Ellipse Width="12" Height="12" Fill="{Binding OkTk, Converter={StaticResource TkBrush}}"
-                           VerticalAlignment="Center" ToolTip.Tip="OK Take（灰/绿/红）" />
-                  <Ellipse Width="12" Height="12" Fill="{Binding OkSht, Converter={StaticResource ShtBrush}}"
-                           VerticalAlignment="Center" ToolTip.Tip="OK Shot（灰/绿/金黄）" />
-                  <TextBlock Text="{Binding FileName}" FontWeight="Bold" FontSize="15" />
-                  <TextBlock Foreground="#777777">
-                    <Run Text="{Binding Scn}" /><Run Text="场" />
-                  </TextBlock>
-                  <TextBlock Text="/" Foreground="#BBBBBB" />
-                  <TextBlock Foreground="#777777">
-                    <Run Text="{Binding Sht}" /><Run Text="镜" />
-                  </TextBlock>
-                  <TextBlock Foreground="#B8860B">
-                    <Run Text="Tk " /><Run Text="{Binding Tk}" />
-                  </TextBlock>
+        <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+          <StackPanel x:Name="TabHost" Orientation="Horizontal" />
+        </ScrollViewer>
+
+        <Button x:Name="LogNext" Grid.Column="2" Width="40" Height="40" Background="Transparent" Padding="0"
+                Click="OnNextClick" ToolTip.Tip="后一天">
+          <PathIcon Data="M8.59,16.59L13.17,12L8.59,7.41L10,6L16,12L10,18Z" Width="20" Height="20" Foreground="#333" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <!-- log-scroll：两级分组（ExpansionTile） -->
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Groups}" Margin="0,4,0,84">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:LogSceneGroup">
+            <Border Background="#E0E0E0" Margin="0,4,0,0" CornerRadius="4">
+              <StackPanel>
+                <!-- 场组头 -->
+                <Button Background="Transparent" Padding="0" HorizontalContentAlignment="Stretch"
+                        Click="OnSceneHeadClick" Tag="{Binding}" ToolTip.Tip="展开/收起本场">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,7,0,7" HorizontalAlignment="Center">
+                      <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="Medium" Foreground="#222"
+                                 HorizontalAlignment="Center" />
+                      <TextBlock Text="场" FontSize="11" Foreground="#444" HorizontalAlignment="Center" />
+                    </StackPanel>
+                    <PathIcon x:Name="SceneChev" Data="M7,10L12,15L17,10" Width="20" Height="20" Foreground="#666"
+                              Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center" />
+                  </Grid>
+                </Button>
+                <!-- 场组体 -->
+                <StackPanel IsVisible="{Binding IsOpen}">
+                  <ItemsControl ItemsSource="{Binding Shots}" Margin="2,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:LogShotGroup">
+                        <Border Background="#EEEEEE">
+                          <StackPanel>
+                            <!-- 镜组头 -->
+                            <Button Background="Transparent" Padding="0" HorizontalContentAlignment="Stretch"
+                                    Click="OnShotHeadClick" Tag="{Binding}">
+                              <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="12,6">
+                                  <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Medium" Foreground="#222" />
+                                  <TextBlock Text="镜" FontSize="11" Foreground="#555" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <PathIcon x:Name="ShotChev" Data="M7,10L12,15L17,10" Width="20" Height="20" Foreground="#666"
+                                          Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center" />
+                              </Grid>
+                            </Button>
+                            <!-- 镜组体：日志条目 -->
+                            <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsOpen}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="models:SlateLogItem">
+                                  <Border Background="{Binding OkTk, Converter={StaticResource TakeRowBrush}}"
+                                          Padding="10,10" Margin="0,0,0,1"
+                                          DoubleTapped="OnItemDoubleTapped" Tag="{Binding}"
+                                          ToolTip.Tip="双击编辑该条场记（LogEditor）">
+                                    <Grid ColumnDefinitions="36,*" ColumnSpacing="10">
+                                      <Border Width="36" Height="36" CornerRadius="18" Background="#D9FFFFFF"
+                                              HorizontalAlignment="Left" VerticalAlignment="Top">
+                                        <TextBlock Text="{Binding Tk}" FontSize="13" FontWeight="500" Foreground="#111"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                      </Border>
+                                      <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock FontSize="14" FontWeight="Bold" Foreground="Black">
+                                          <Run Text="{Binding FilenamePrefix}" /><Run Text="{Binding FilenameLinker}" /><Run Text="{Binding FilenameNum, StringFormat=D3}" />
+                                        </TextBlock>
+                                        <TextBlock FontSize="12" Foreground="#1C1C1C" TextWrapping="Wrap" LineHeight="17">
+                                          <Run Text="TK Note: " /><Run Text="{Binding TkNote}" />
+                                        </TextBlock>
+                                        <TextBlock FontSize="12" Foreground="#1C1C1C" TextWrapping="Wrap" LineHeight="17"
+                                                   IsVisible="{Binding ShtNote, Converter={StaticResource HasValue}}">
+                                          <Run Text="Shot Note: " /><Run Text="{Binding ShtNote}" />
+                                        </TextBlock>
+                                        <TextBlock FontSize="12" Foreground="#1C1C1C" TextWrapping="Wrap" LineHeight="17"
+                                                   IsVisible="{Binding ScnNote, Converter={StaticResource HasValue}}">
+                                          <Run Text="Scene Note: " /><Run Text="{Binding ScnNote}" />
+                                        </TextBlock>
+                                      </StackPanel>
+                                    </Grid>
+                                  </Border>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
                 </StackPanel>
-                <TextBlock Text="{Binding TkNote}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding ShtNote}" TextWrapping="Wrap" Foreground="#555555" />
-                <TextBlock Text="{Binding ScnNote}" TextWrapping="Wrap" FontSize="12" Foreground="#888888" />
               </StackPanel>
-              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top" Margin="8,0,0,0">
-                <Button Content="编辑" Click="OnEditClick" Tag="{Binding}" />
-                <Button Content="删除" Foreground="#C62828"
-                        Command="{Binding $parent[ListBox].((vm:SlateLogViewModel)DataContext).DeleteCommand}"
-                        CommandParameter="{Binding}" />
-              </StackPanel>
-            </Grid>
-          </Border>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
-  </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
 
+    <!-- share-fab（#2196F3 分享）→ 导出全部场记 JSON -->
+    <Button Grid.Row="1" Width="56" Height="56" CornerRadius="28" Background="#2196F3"
+            HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,14,20" Padding="0"
+            Command="{Binding ExportCommand}"
+            ToolTip.Tip="导出场记 JSON（跨日合并）">
+      <PathIcon Data="M21,11L14,4V9C7,10 4,14 3,19C5.5,15.5 9,14 14,14V19L21,11Z" Width="24" Height="24" Foreground="White" />
+    </Button>
+  </Grid>
 </UserControl>

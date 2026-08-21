@@ -4,96 +4,166 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:VoiSlate.ViewModels"
              xmlns:models="using:VoiSlate.Models"
-             mc:Ignorable="d" d:DesignWidth="1080" d:DesignHeight="720"
+             mc:Ignorable="d" d:DesignWidth="390" d:DesignHeight="700"
              x:Class="VoiSlate.Views.ScheduleView"
              x:DataType="vm:ScheduleViewModel">
 
   <!--
-    Agent C：计划页（对齐 scene_schedule_page 意图：左场列表 / 右镜列表 / 底部场备注）。
-    数据源 IScheduleBook（P0.5 只读 Book；P0.5 播种两份生产场表）。
-    增删改导入为 stub 命令（内存态 + Toast）；NoteEditorWindow 编辑对话框随 B/D 合入后交付。
+    复刻目标：voislate-html 之 renderSchedulePage（docs/ui-layout-spec.md §4）：
+      .sch 左右两栏 flex 1:3（左场右镜，1px #e4e4e4 分隔）；
+      .scn-row：avatar 40×40 圆 #e3e7ea（场名如 1A）+ type-tag 10px #555（场地如 万星园）；
+        选中底 #d1c4e9；双击/紫条单击 → 编辑场次（sheet 简化：SmallEditDialog）；
+      .sht-row：avatar（镜名）+ chip-row（objects → #ba68c8 白字圆角 20）+ type + append；
+        选中底 #e0e0e0；双击 → 编辑镜头；
+      .scn-info 紫条 #f3e5f5（name-chip #e1bee7「1A场」+ info-append + info-type 下划线）；.add-scn-tile「场次+」；
+      右下 FAB：镜头+（#e6e9ec，底 96）与「导入」（.low 溢出位，真实 CSV 导入）。
+    Avalonia 增强：数据真实落库（LiteDbScheduleStore + PersistAsync），非 HTML 演示 toast。
   -->
-  <Grid RowDefinitions="Auto,*" ColumnDefinitions="240,12,*" Margin="20">
+  <UserControl.Styles>
+    <!-- 场行选中 #d1c4e9（.scn-row.sel） -->
+    <Style Selector="ListBox.scnList ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.scnList ListBoxItem:selected">
+      <Setter Property="Background" Value="#D1C4E9" />
+    </Style>
+    <!-- 镜行选中 #e0e0e0（.sht-row.sel） -->
+    <Style Selector="ListBox.shtList ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.shtList ListBoxItem:selected">
+      <Setter Property="Background" Value="#E0E0E0" />
+    </Style>
+  </UserControl.Styles>
 
-    <!-- 顶部操作 -->
-    <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
-      <Button Content="导入 CSV" Click="OnImportCsvClick" />
-      <Button Content="场次＋" Command="{Binding AddSceneCommand}" />
-      <Button Content="镜头＋" Command="{Binding AddShotCommand}" />
-      <Button Content="编辑镜备注" Click="OnEditClick" />
-      <Button Content="删除场" Foreground="#C62828" Command="{Binding DeleteItemCommand}" CommandParameter="scene" />
-      <Button Content="删除镜" Foreground="#C62828" Command="{Binding DeleteItemCommand}" CommandParameter="shot" />
-      <Button Content="↓ 场下移" Command="{Binding MoveItemCommand}" CommandParameter="scene" />
-      <Button Content="↓ 镜下移" Command="{Binding MoveItemCommand}" CommandParameter="shot" />
-    </StackPanel>
+  <Grid>
+    <Grid ColumnDefinitions="*,3*">
 
-    <!-- 左：场列表 -->
-    <ListBox Grid.Row="1" Grid.Column="0"
-             ItemsSource="{Binding Scenes}"
-             SelectedIndex="{Binding SelectedSceneIndex, Mode=TwoWay}">
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="models:SceneSchedule">
-          <Border Padding="10,8" Margin="0,0,0,6" CornerRadius="6" Background="#F5F2FA">
-            <StackPanel Spacing="2">
-              <TextBlock FontWeight="Bold" FontSize="15">
-                <Run Text="{Binding Info.Name}" /><Run Text=" 场" />
-              </TextBlock>
-              <TextBlock Text="{Binding Info.Note.Type}" FontSize="12" Foreground="#888888" />
-            </StackPanel>
-          </Border>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
-
-    <!-- 右：镜列表 + 场备注 -->
-    <Grid Grid.Row="1" Grid.Column="2" RowDefinitions="*,Auto">
-      <ListBox Grid.Row="0" ItemsSource="{Binding SelectedSceneShots}"
-               SelectedIndex="{Binding SelectedShotIndex, Mode=TwoWay}"
-               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-        <ListBox.ItemTemplate>
-          <DataTemplate x:DataType="models:ScheduleItem">
-            <Border Padding="10,8" Margin="0,0,0,6" CornerRadius="6"
-                    BorderBrush="#EEEEEE" BorderThickness="1">
-              <StackPanel Spacing="4">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <TextBlock FontWeight="Bold" FontSize="15">
-                    <Run Text="{Binding Name}" /><Run Text=" 镜" />
-                  </TextBlock>
-                  <ItemsControl ItemsSource="{Binding Note.Objects}" VerticalAlignment="Center">
-                    <ItemsControl.ItemsPanel>
-                      <ItemsPanelTemplate>
-                        <StackPanel Orientation="Horizontal" Spacing="4" />
-                      </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="x:String">
-                        <Border Background="#CE93D8" CornerRadius="10" Padding="7,1" Margin="0,1">
-                          <TextBlock Text="{Binding}" FontSize="12" />
-                        </Border>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
+      <!-- ================= 左列（.sch-left flex:1）：场次列表 + add-scn-tile ================= -->
+      <Grid Grid.Column="0" RowDefinitions="*,Auto">
+        <Border Width="1" Background="#E4E4E4" HorizontalAlignment="Right" Grid.RowSpan="2" />
+        <ListBox Grid.Row="0" Classes="scnList" ItemsSource="{Binding Scenes}"
+                 SelectedIndex="{Binding SelectedSceneIndex, Mode=TwoWay}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="models:SceneSchedule">
+              <Border Padding="8,8,6,8" BorderBrush="#F0F0F0" BorderThickness="0,0,0,1"
+                      Background="Transparent" DoubleTapped="OnSceneDoubleTapped" Tag="{Binding}">
+                <StackPanel VerticalAlignment="Center">
+                  <Border Width="40" Height="40" CornerRadius="20" Background="#E3E7EA"
+                          HorizontalAlignment="Center" BoxShadow="0 1 3 0 #26000000">
+                    <TextBlock Text="{Binding Info.Name}" FontSize="15" FontWeight="Medium" Foreground="#222"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <TextBlock Text="{Binding Info.Note.Type}" FontSize="10" Foreground="#555"
+                             HorizontalAlignment="Center" Margin="0,4,0,0" LineHeight="12"
+                             TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxWidth="64" />
                 </StackPanel>
-                <TextBlock Text="{Binding Note.Type, StringFormat='景别：{0}'}" FontSize="12" Foreground="#666666" />
-                <TextBlock Text="{Binding Note.Append}" FontSize="12" Foreground="#888888" TextWrapping="Wrap" />
-              </StackPanel>
-            </Border>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
+              </Border>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
 
-      <!-- 场备注（scene note.append） -->
-      <Border Grid.Row="1" Margin="0,8,0,0" Padding="14" Background="#F2F5DE" CornerRadius="8">
-        <StackPanel Spacing="3">
-          <TextBlock FontWeight="Bold" FontSize="15">
-            <Run Text="{Binding SelectedScene.Info.Name}" /><Run Text=" 场备注" />
-          </TextBlock>
-          <TextBlock Text="{Binding SelectedScene.Info.Note.Append}" TextWrapping="Wrap" Foreground="#444444" />
-          <TextBlock Text="{Binding SelectedScene.Info.Note.Type, StringFormat='场景：{0}'}" FontSize="12" Foreground="#666666" />
-        </StackPanel>
-      </Border>
+        <!-- add-scn-tile：场次+ -->
+        <Button Grid.Row="1" Background="White" Padding="0" Height="46" HorizontalContentAlignment="Center"
+                Command="{Binding AddSceneCommand}" ToolTip.Tip="新增场次">
+          <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <PathIcon Data="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" Width="26" Height="26" Foreground="#444" />
+            <TextBlock Text="场次+" FontSize="12" Foreground="#666" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </Grid>
+
+      <!-- ================= 右列（.sch-right flex:3）：镜头列表 + scn-info ================= -->
+      <Grid Grid.Column="1" RowDefinitions="*,Auto">
+        <ListBox Grid.Row="0" Classes="shtList" ItemsSource="{Binding SelectedSceneShots}"
+                 SelectedIndex="{Binding SelectedShotIndex, Mode=TwoWay}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="models:ScheduleItem">
+              <Border Padding="8,8,10,8" BorderBrush="#F0F0F0" BorderThickness="0,0,0,1"
+                      Background="Transparent" DoubleTapped="OnShotDoubleTapped" Tag="{Binding}">
+                <Grid ColumnDefinitions="36,*" ColumnSpacing="10">
+                  <Border Width="36" Height="36" CornerRadius="18" Background="#E3E7EA"
+                          HorizontalAlignment="Left" VerticalAlignment="Top" BoxShadow="0 1 3 0 #26000000">
+                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="500" Foreground="#222"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <StackPanel Grid.Column="1" Spacing="0">
+                    <!-- chip-row：objects 人物 chips（横向滚动、隐藏滚动条） -->
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                      <ItemsControl ItemsSource="{Binding Note.Objects}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="4" />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="x:String">
+                            <Border Background="#BA68C8" CornerRadius="20" Padding="9,2">
+                              <TextBlock Text="{Binding}" FontSize="12" Foreground="White" TextTrimming="CharacterEllipsis" />
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </ScrollViewer>
+                    <TextBlock Margin="0,3,0,0" FontSize="13" Foreground="#333" TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis">
+                      <Run Text="{Binding Note.Type}" /><Run Text="," />
+                    </TextBlock>
+                    <TextBlock FontSize="12" Foreground="#666" LineHeight="17" TextWrapping="Wrap"
+                               MaxLines="2" TextTrimming="CharacterEllipsis" Text="{Binding Note.Append}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- scn-info 紫条：单击 → 编辑场次 -->
+        <Border Grid.Row="1" Background="#F3E5F5" BorderBrush="#EAD3EE" BorderThickness="0,1,0,0"
+                Padding="12,10" Tag="{Binding SelectedScene}" DoubleTapped="OnSceneInfoTapped">
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+            <!-- name-chip -->
+            <Border Grid.Column="0" Background="#E1BEE7" CornerRadius="8" Padding="9,6" VerticalAlignment="Center">
+              <TextBlock FontSize="13.5" FontWeight="Bold" Foreground="#222">
+                <Run Text="{Binding SelectedScene.Info.Name}" /><Run Text="场" />
+              </TextBlock>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Text="{Binding SelectedScene.Info.Note.Append}" FontSize="11.5" Foreground="#757575"
+                         LineHeight="16" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
+              <TextBlock FontSize="11.5" Foreground="#555" TextDecorations="Underline" LineHeight="16"
+                         TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
+                <Run Text="场景：" /><Run Text="{Binding SelectedScene.Info.Note.Type}" />
+              </TextBlock>
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Grid>
     </Grid>
 
+    <!-- ================= 右下 FAB（镜头+ / 导入 CSV） ================= -->
+    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,10,14" ZIndex="10">
+      <Button Background="#E6E9EC" Padding="16,10" CornerRadius="26" FontSize="13" Foreground="#1C1C1C"
+              Command="{Binding AddShotCommand}"
+              ToolTip.Tip="镜头+（克隆当前场末镜）">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <PathIcon Data="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" Width="18" Height="18" Foreground="#1C1C1C" />
+          <TextBlock Text="镜头+" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+      <Button Background="#E6E9EC" Padding="16,10" CornerRadius="26" FontSize="13" Foreground="#1C1C1C"
+              Click="OnImportCsvClick"
+              ToolTip.Tip="导入拍摄计划 CSV（文件选择器）">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <PathIcon Data="M12,18L8,14L9.41,12.59L11,14.17V6H13V14.17L14.59,12.59L16,14ZM6,21C4.9,21 4,20.1 4,19V14H6V19H18V14H20V19C20,20.1 19.1,21 18,21Z" Width="18" Height="18" Foreground="#1C1C1C" />
+          <TextBlock Text="导入" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+    </StackPanel>
   </Grid>
-
 </UserControl>

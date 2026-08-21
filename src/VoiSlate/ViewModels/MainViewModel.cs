@@ -86,6 +86,8 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void Navigate(string? key)
     {
+        // 键大小写归一：CommandParameter 可用 "SlateLog" 亦可 "slatelog"（字典键小写）
+        key = key?.ToLowerInvariant();
         if (key is null || !_byKey.TryGetValue(key, out var page))
         {
             return;
