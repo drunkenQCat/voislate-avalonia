@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <!-- Nullable/ImplicitUsings inherited from ../Directory.Build.props -->
+    <ApplicationId>com.voislate.app</ApplicationId>
+    <ApplicationTitle>VoiSlate</ApplicationTitle>
+    <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
+    <!-- minSdk 23 required by androidx.lifecycle (pulled in by Avalonia.Android 12.1.1's AppCompat deps);
+         manifests merger fails with minSdk < 23 (AMM0000). -->
+    <!-- VoiSlate.csproj is a WinExe (desktop exe); Android apps are self-contained executables, so the
+         SDK would reject the ProjectReference with NETSDK1150. The reference is consumed as a plain
+         assembly here, so disable the self-contained executable reference validation (reasoning in
+         android-state/scaffold.json). -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+    <!-- AndroidPackageFormat deliberately NOT pinned here; pass at publish time. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VoiSlate\VoiSlate.csproj"
+                      GlobalPropertiesToRemove="RuntimeIdentifier;RuntimeIdentifiers;SelfContained" />
+    <PackageReference Include="Avalonia.Android" Version="12.1.1" />
+  </ItemGroup>
+
+</Project>
