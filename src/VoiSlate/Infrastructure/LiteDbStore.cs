@@ -21,15 +21,15 @@ public sealed class LiteDbStore : IDisposable
     {
         FilePath = connectionString;
         IsMemory = connectionString == ":memory:";
-        _db = new LiteDatabase(connectionString);
+        _db = new LiteDatabase(connectionString, new BsonMapper { EmptyStringToNull = false });
     }
 
     /// <summary>应用数据目录下的默认库（macOS: ~/Library/Application Support/VoiSlate/voislate.db）。</summary>
     public static string DefaultConnectionString()
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "VoiSlate");
+        var dir = Environment.GetEnvironmentVariable("VOISLATE_DATA_DIR");
+        if (string.IsNullOrWhiteSpace(dir)) dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VoiSlate");
         Directory.CreateDirectory(dir);
         return Path.Combine(dir, "voislate.db");
     }

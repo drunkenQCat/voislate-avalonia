@@ -1,0 +1,63 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector="Window.workspace">
+    <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="#29443E" />
+  </Style>
+  <Style Selector="Window.workspace Button">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="Background" Value="#EDF3EE" />
+    <Setter Property="Foreground" Value="#486456" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Window.workspace Button.primary">
+    <Setter Property="Background" Value="#315E4C" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Window.workspace Button.purple">
+    <Setter Property="Background" Value="#683B76" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Window.workspace Button.selected">
+    <Setter Property="Background" Value="#31574C" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Window.workspace Button.quiet">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Window.workspace Button.danger">
+    <Setter Property="Background" Value="#FBEDEC" />
+    <Setter Property="Foreground" Value="#B34848" />
+  </Style>
+  <Style Selector="Window.workspace TextBox">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="MinHeight" Value="42" />
+    <Setter Property="Background" Value="White" />
+    <Setter Property="BorderBrush" Value="#DCE5DE" />
+    <Setter Property="Padding" Value="12,9" />
+  </Style>
+  <Style Selector="Window.workspace ComboBox">
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="#F4F7F3" />
+    <Setter Property="BorderBrush" Value="#DFE7DF" />
+  </Style>
+  <Style Selector="Window.workspace Button.rail:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#355D55" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+  </Style>
+  <Style Selector="Window.workspace Button.rail:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#416E60" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+  </Style>
+  <Style Selector="Window.workspace Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#46745B" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+  </Style>
+  <Style Selector="Window.workspace Button.purple:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#80558C" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+  </Style>
+</Styles>

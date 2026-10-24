@@ -30,6 +30,29 @@ public sealed class SlateLogItem
     public TkStatus OkTk { get; set; } = TkStatus.NotChecked;
     public ShtStatus OkSht { get; set; } = ShtStatus.NotChecked;
 
+    // Optional desktop metadata; absent fields remain readable in existing databases.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsRetake { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RetakeLabel { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsShotEnd { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? RecordedAt { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Location { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ShotType { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SceneId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ShotId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Tracks { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsFakeTake { get; set; }
+
     public override string ToString() =>
         $"SlateLogItem{{scn: {Scn}, sht: {Sht}, tk: {Tk}, fileName: {FileName}, tkNote: {TkNote}, shtNote: {ShtNote}, scnNote: {ScnNote}, okTk: {OkTk}, okSht: {OkSht}}}";
 }

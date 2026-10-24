@@ -39,12 +39,20 @@ public sealed class LiteDbScheduleStore(LiteDbStore store) : ScheduleStore, ISch
 
     private ILiteCollection<ScheduleDoc> Collection => store.Database.GetCollection<ScheduleDoc>("scene_schedules");
 
+    private static ScheduleItem Normalize(ScheduleItem item)
+    {
+        item.StableId ??= string.Empty;
+        item.Key ??= string.Empty; item.Fix ??= string.Empty; item.Note ??= new();
+        item.Note.Type ??= string.Empty; item.Note.Append ??= string.Empty; item.Note.Objects ??= [];
+        return item;
+    }
+
     public Task<IReadOnlyList<SceneSchedule>> LoadAllAsync()
     {
         var scenes = Collection.FindAll()
             .OrderBy(x => x.Seq)
             .ThenBy(x => x.Key, StringComparer.Ordinal)
-            .Select(d => new SceneSchedule(d.Items, d.Info))
+            .Select(d => new SceneSchedule(d.Items.Select(Normalize).ToList(), Normalize(d.Info)))
             .ToList();
         return Task.FromResult<IReadOnlyList<SceneSchedule>>(scenes);
     }

@@ -41,6 +41,16 @@ public sealed class LiteDbLogRepository(LiteDbStore store) : ILogRepository
         public string ScnNote { get; set; } = string.Empty;
         public TkStatus OkTk { get; set; }
         public ShtStatus OkSht { get; set; }
+        public bool IsRetake { get; set; }
+        public string? RetakeLabel { get; set; }
+        public bool IsShotEnd { get; set; }
+        public DateTimeOffset? RecordedAt { get; set; }
+        public string? Location { get; set; }
+        public string? ShotType { get; set; }
+        public string? SceneId { get; set; }
+        public string? ShotId { get; set; }
+        public List<string>? Tracks { get; set; }
+        public bool IsFakeTake { get; set; }
     }
 
     private static LogDoc ToDoc(SlateLogItem item) => new()
@@ -58,22 +68,46 @@ public sealed class LiteDbLogRepository(LiteDbStore store) : ILogRepository
         ScnNote = item.ScnNote,
         OkTk = item.OkTk,
         OkSht = item.OkSht,
+        IsRetake = item.IsRetake,
+        RetakeLabel = item.RetakeLabel,
+        IsShotEnd = item.IsShotEnd,
+        RecordedAt = item.RecordedAt,
+        Location = item.Location,
+        ShotType = item.ShotType,
+        SceneId = item.SceneId,
+        ShotId = item.ShotId,
+        Tracks = item.Tracks,
+        IsFakeTake = item.IsFakeTake,
+
+
     };
 
     private static SlateLogItem ToItem(LogDoc d) => new()
     {
         Id = d.Id,
-        Scn = d.Scn,
-        Sht = d.Sht,
+        Scn = d.Scn ?? string.Empty,
+        Sht = d.Sht ?? string.Empty,
         Tk = d.Tk,
-        FilenamePrefix = d.FilenamePrefix,
-        FilenameLinker = d.FilenameLinker,
+        FilenamePrefix = d.FilenamePrefix ?? string.Empty,
+        FilenameLinker = d.FilenameLinker ?? string.Empty,
         FilenameNum = d.FilenameNum,
-        TkNote = d.TkNote,
-        ShtNote = d.ShtNote,
-        ScnNote = d.ScnNote,
+        TkNote = d.TkNote ?? string.Empty,
+        ShtNote = d.ShtNote ?? string.Empty,
+        ScnNote = d.ScnNote ?? string.Empty,
         OkTk = d.OkTk,
         OkSht = d.OkSht,
+        IsRetake = d.IsRetake,
+        RetakeLabel = d.RetakeLabel,
+        IsShotEnd = d.IsShotEnd,
+        RecordedAt = d.RecordedAt,
+        Location = d.Location,
+        ShotType = d.ShotType,
+        SceneId = d.SceneId,
+        ShotId = d.ShotId,
+        Tracks = d.Tracks,
+        IsFakeTake = d.IsFakeTake,
+
+
     };
 
     public Task<IReadOnlyList<string>> GetDatesAsync()
