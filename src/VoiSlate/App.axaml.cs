@@ -63,9 +63,9 @@ public partial class App : Application
             {
                 var ct = CancellationToken.None;
                 using var scope = _services.CreateScope();
-                _services.GetRequiredService<ISeedService>().EnsureSeededAsync(ct).GetAwaiter().GetResult();
-                _services.GetRequiredService<RecordingSessionViewModel>().Initialization.GetAwaiter().GetResult();
-                _services.GetRequiredService<ITakeFlowService>().InitializeAsync(ct).GetAwaiter().GetResult();
+                if (_services.GetRequiredService<ISessionSettingsStore>().GetStringAsync(Desktop.DesktopWorkspaceService.SessionKey).GetAwaiter().GetResult() is null)
+                    _services.GetRequiredService<ISeedService>().EnsureSeededAsync(ct).GetAwaiter().GetResult();
+                // The Windows workspace owns its session; do not initialize the legacy take writer.
             }
             catch (Exception ex)
             {
@@ -75,16 +75,18 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Agent C：MainWindow 壳 + 契约 MainViewModel（stub 版；B 合入后替换 DI 注册即可）。
-            var mainViewModel = _services.GetRequiredService<MainViewModel>();
-            Main = mainViewModel;
-            desktop.MainWindow = new MainWindow
-            {
-                DataContext = mainViewModel,
-            };
+            // P8 上游：桌面改道 DesktopWorkspaceWindow（时间轴工作台 + 百炼语音），旧 MainWindow 壳仅剩 Android 同构使用。
+            var workspace = new Desktop.DesktopWorkspaceService(
+                new LiteDbScheduleStore(_services.GetRequiredService<LiteDbStore>()),
+                _services.GetRequiredService<ILogRepository>(),
+                _services.GetRequiredService<ISessionSettingsStore>(),
+                _services.GetRequiredService<ITimeProvider>(), new Desktop.LiteDbWorkspaceTransaction(_services.GetRequiredService<LiteDbStore>()));
+            workspace.InitializeAsync().GetAwaiter().GetResult();
+            desktop.MainWindow = new Desktop.DesktopWorkspaceWindow(workspace, new Desktop.Speech.BailianSettingsStore(
+                _services.GetRequiredService<ISessionSettingsStore>(), new Desktop.Speech.WindowsTokenProtector()));
 
             // DI-REGISTRATION (C keep) — Agent C 接管 App.axaml.cs 时全量保留本区域。
-            desktop.ShutdownRequested += (_, _) => OnShutdown();
+            desktop.Exit += (_, _) => OnShutdown();
         }
         else if (ApplicationLifetime is IActivityApplicationLifetime androidLifetime)
         {
@@ -105,6 +107,7 @@ public partial class App : Application
             //     SetupWithLifetime 触发本方法时 ApplicationLifetime 已是 IActivityApplicationLifetime，
             //     Activity 的 InitializeAvaloniaView 必然晚于 MainViewFactory 赋值（官方样本同此依赖）。
             var mainViewModel = _services.GetRequiredService<MainViewModel>();
+            Main = mainViewModel;   // P7：设置页返回等非窗口场景的直连（Android 旧壳仍在用）
             androidLifetime.MainViewFactory = () => CreateAndroidMainView(mainViewModel);
         }
 

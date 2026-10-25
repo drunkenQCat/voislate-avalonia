@@ -11,6 +11,8 @@ public class ScheduleItem
     [JsonIgnore]
     public int Id { get; set; }
 
+    public string StableId { get; set; } = string.Empty;
+
     public string Key { get; set; } = string.Empty;
 
     public string Fix { get; set; } = string.Empty;
