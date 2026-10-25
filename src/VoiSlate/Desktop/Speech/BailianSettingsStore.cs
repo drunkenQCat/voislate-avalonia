@@ -33,6 +33,20 @@ public sealed class WindowsTokenProtector : ITokenProtector
         catch (Exception e) when (e is CryptographicException or FormatException) { throw new InvalidOperationException("无法解密已保存的 Token，请重新填写", e); }
     }
 }
+/// <summary>非 Windows 宿主（Android）的 Token 保管：**只是 base64 混淆，不是加密**。
+/// 目的仅是让同一套界面在没有 DPAPI 的平台上继续可用；密钥可被读到本地存储的人解出，
+/// 因此设置页在非 Windows 上会显式提示这一点（见 DesktopWorkspacePreferences）。</summary>
+public sealed class PlainTokenProtector : ITokenProtector
+{
+    private const string Prefix = "plain1:";
+    public string Protect(string value) => Prefix + Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
+    public string Unprotect(string value)
+    {
+        if (!value.StartsWith(Prefix, StringComparison.Ordinal)) return value;   // 兼容未加前缀的旧值
+        try { return Encoding.UTF8.GetString(Convert.FromBase64String(value[Prefix.Length..])); }
+        catch (FormatException e) { throw new InvalidOperationException("无法读取已保存的 Token，请重新填写", e); }
+    }
+}
 /// <summary>Secrets are deliberately separate from workspace sessions and all backup/export DTOs.</summary>
 public sealed class BailianSettingsStore(ISessionSettingsStore settings, ITokenProtector protector)
 {

@@ -9,14 +9,16 @@ using VoiSlate.Desktop.Speech;
 
 namespace VoiSlate.Desktop;
 
-public sealed partial class DesktopWorkspaceWindow
+public sealed partial class DesktopWorkspaceView
 {
     private readonly BailianSettingsStore _speechSettings;
     private readonly BailianRealtimeClient _speechClient;
     private readonly Func<int, IPcmCapture> _captureFactory;
     private Control BuildVoice()
     {
-        var preview = T("按住话筒，左滑录音标注 / 右滑镜头标注，松手提交", 11, "#83919C");
+        var preview = T(_voiceCaptureAvailable
+            ? "按住话筒，左滑录音标注 / 右滑镜头标注，松手提交"
+            : "语音标注需要本机麦克风采集，本平台暂未接入；可直接在下面两个输入框手动记录", 11, "#83919C");
         AutomationProperties.SetAutomationId(preview, "voice-preview");
         var joy = Box(new Grid(), "#EAEFF0", 8, "#DFE6E7", 40); joy.Height = 76;
         var track = (Grid)joy.Child!;
@@ -27,6 +29,8 @@ public sealed partial class DesktopWorkspaceWindow
         Control Mic() => new PathIcon { Data = Geometry.Parse("M12,14C13.66,14 15,12.66 15,11V5C15,3.34 13.66,2 12,2C10.34,2 9,3.34 9,5V11C9,12.66 10.34,14 12,14 M18,11C18,14.53 15.06,17.44 11.53,17.5C8.08,17.56 5,14.93 5,11H3.13C3.13,14.66 6.31,17.66 10,17.9V21H14V17.9C17.69,17.66 20.87,14.66 20.87,11H18"), Width = 25, Height = 25, Foreground = Brushes.White };
         knob.Content = Mic(); knob.Width = 58; knob.Height = 58; knob.CornerRadius = new CornerRadius(29);
         knob.HorizontalAlignment = HorizontalAlignment.Center; knob.Padding = new Thickness(0); knob.Background = Brush("#C6A4D4"); track.Children.Add(knob);
+        // 只降透明度、不禁用：禁用按钮拿不到焦点/手势，会让「按了给你一句解释」这条降级路径也走不通。
+        if (!_voiceCaptureAvailable) knob.Opacity = 0.45;
         BailianMicrophoneSession? session = null;
         bool active = false, processing = false; int generation = 0; double start = 0; string? target = null;
         string beforeRec = "", beforeShot = "", scene = "", shot = "";
@@ -42,6 +46,7 @@ public sealed partial class DesktopWorkspaceWindow
         _finishVoice = Cancel;
         async Task Begin()
         {
+            if (!_voiceCaptureAvailable) { preview.Text = "语音标注需要本机麦克风采集，本平台暂未接入"; return; }
             if (active || processing || _busy || _service.Draft.Ended || _service.Shot is null) return;
             active = true; var current = ++generation;
             beforeRec = _recNote?.Text ?? ""; beforeShot = _shotNote?.Text ?? "";

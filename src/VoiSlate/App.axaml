@@ -1,7 +1,6 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:VoiSlate.ViewModels"
-             xmlns:views="using:VoiSlate.Views"
              x:Class="VoiSlate.App"
              RequestedThemeVariant="Default">
 
@@ -10,15 +9,12 @@
     保留：本注释段、DI-REGISTRATION 区域（App.axaml.cs）、以及后续 VoiSlatePalette 合并（D）。
   -->
 
-  <!--
-    VM→View 隐式导航模板：DataTemplate 必须放在 DataTemplates 集合，不能放进 Resources
-    （Resources 是键值集合，不接受无 x:Key 的隐式模板——之前 AVLN3000 的根因）。
-  -->
-
   <Application.Styles>
     <FluentTheme />
     <!-- Agent D：自定义控件的默认样式/模板（StyleInclude 加载 selective Styles） -->
     <StyleInclude Source="avares://VoiSlate/Themes/Controls.axaml" />
+    <!-- P8 工作台样式：选择器已改成 .workspace（不再依赖 Window），因此桌面窗口与 Android 无窗口宿主共用同一份。 -->
+    <StyleInclude Source="avares://VoiSlate/Desktop/DesktopWorkspaceStyles.axaml" />
   </Application.Styles>
 
   <Application.Resources>
@@ -31,20 +27,11 @@
     </ResourceDictionary>
   </Application.Resources>
 
-  <Application.DataTemplates>
-    <DataTemplate DataType="{x:Type vm:RecordViewModel}">
-      <views:RecordView />
-    </DataTemplate>
-    <DataTemplate DataType="{x:Type vm:ScheduleViewModel}">
-      <views:ScheduleView />
-    </DataTemplate>
-    <DataTemplate DataType="{x:Type vm:SlateLogViewModel}">
-      <views:SlateLogView />
-    </DataTemplate>
-    <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
-      <views:SettingsView />
-    </DataTemplate>
-  </Application.DataTemplates>
+  <!--
+    P7 手机壳的 4 条 VM→View 隐式模板已删除：界面统一由 Desktop/DesktopWorkspaceView 承担
+    （桌面窗口与 Android 共用），ViewModel 不再需要通过模板换取视图。
+  -->
+
 
   <!-- 主题资源键（VoiSlatePalette.axaml）将由 Agent D 产出并在此合并；C 视图暂用内联色值 -->
 

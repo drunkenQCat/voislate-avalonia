@@ -5,7 +5,7 @@ using Avalonia.Threading;
 
 namespace VoiSlate.Desktop;
 
-public sealed partial class DesktopWorkspaceWindow
+public sealed partial class DesktopWorkspaceView
 {
     private readonly DispatcherTimer _backupTimer = new() { Interval = TimeSpan.FromMinutes(3) };
     private bool _backupRunning, _closingBackup, _exitReady;
@@ -20,21 +20,29 @@ public sealed partial class DesktopWorkspaceWindow
             finally { _backupRunning = false; }
         };
         _backupTimer.Start();
-        Closing += async (_, e) =>
+        // 退出前备份：窗口壳与 Android 宿主共用同一入口（原来挂在 Window.Closing 上）。
+
+        DetachedFromVisualTree += (_, _) => _backupTimer.Stop();
+    }
+
+    /// <summary>已完成退出备份（宿主据此放行关闭）。</summary>
+    internal bool ExitReady => _exitReady;
+
+    /// <summary>退出前备份。返回 true 表示可以退出（宿主随后关闭窗口/Activity）。</summary>
+    internal async Task<bool> PrepareExitAsync()
+    {
+        if (_exitReady) return true;
+        _finishVoice?.Invoke();
+        if (!_service.State.AutoBackup) { _backupTimer.Stop(); _exitReady = true; return true; }
+        if (_closingBackup) return false;
+        _closingBackup = true; _backupTimer.Stop();
+        try { await _service.WriteBackupAsync("exit"); _exitReady = true; return true; }
+        catch (Exception ex)
         {
-            if (_exitReady) return;
-            _finishVoice?.Invoke();
-            if (!_service.State.AutoBackup) { _backupTimer.Stop(); return; }
-            e.Cancel = true; if (_closingBackup) return;
-            _closingBackup = true; _backupTimer.Stop();
-            try { await _service.WriteBackupAsync("exit"); _exitReady = true; Close(); }
-            catch (Exception ex)
-            {
-                _closingBackup = false; _backupTimer.Start();
-                if (await Confirm("退出备份失败", "本机数据库仍已保存，但退出备份失败：" + ex.Message + "。是否仍然退出？")) { _exitReady = true; Close(); }
-            }
-        };
-        Closed += (_, _) => _backupTimer.Stop();
+            _closingBackup = false; _backupTimer.Start();
+            if (await Confirm("退出备份失败", "本机数据库仍已保存，但退出备份失败：" + ex.Message + "。是否仍然退出？")) { _exitReady = true; return true; }
+            return false;
+        }
     }
     private Control BuildBackupSettings()
     {
@@ -47,7 +55,8 @@ public sealed partial class DesktopWorkspaceWindow
             {
                 var folders = await StorageProvider.OpenFolderPickerAsync(new() { Title = "选择备份目录", AllowMultiple = false });
                 if (folders.Count == 0) return;
-                var path = folders[0].TryGetLocalPath() ?? throw new InvalidOperationException("请选择本地文件夹");
+                // Android 的选择器是 SAF 文档 URI，没有本地路径（TryGetLocalPath 返回 null）：备份只能留在应用数据目录。
+                var path = folders[0].TryGetLocalPath() ?? throw new InvalidOperationException("当前平台的选择器不提供本地路径；备份会写到应用数据目录，可用「立即备份」或导出 JSON。");
                 await _service.SetBackupPreferencesAsync(automatic.IsChecked == true, path); directory.Text = _service.BackupDirectory; status.Text = "备份目录已保存";
             }
             catch (Exception ex) { status.Text = ex.Message; }
@@ -70,7 +79,7 @@ public sealed partial class DesktopWorkspaceWindow
             if (files.Count == 0) return;
             await using var stream = await files[0].OpenReadAsync(); using var reader = new StreamReader(stream);
             var content = await reader.ReadToEndAsync(); var preview = DesktopWorkspaceService.PrepareImport(content, _service.Today);
-            Window? dialog = null;
+            WorkspaceDialog? dialog = null;
             var date = new TextBox { Text = _service.Today, PlaceholderText = "六位年月日，例如 261024" };
             var mode = new ComboBox { ItemsSource = preview.Legacy ? new[] { "合并场记" } : new[] { "合并（保留现有内容）", "恢复备份（替换计划与场记）" }, SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
             var error = T("", 12, "#AD4C4C"); bool importing = false;
@@ -80,7 +89,7 @@ public sealed partial class DesktopWorkspaceWindow
                 try
                 {
                     var parsed = DesktopWorkspaceService.PrepareImport(content, date.Text ?? ""); var replace = mode.SelectedIndex == 1;
-                    if (replace && !await Confirm("恢复备份", "将替换当前计划与全部场记。会先生成恢复前备份；Token 和本机备份偏好保留。是否继续？", dialog)) return;
+                    if (replace && !await Confirm("恢复备份", "将替换当前计划与全部场记。会先生成恢复前备份；Token 和本机备份偏好保留。是否继续？")) return;
                     await _service.WriteBackupAsync("before-import");
                     await _service.ImportAsync(parsed, replace); dialog!.Close(); Toast("已导入；相同日期与文件名的相同记录自动跳过");
                 }
@@ -91,7 +100,7 @@ public sealed partial class DesktopWorkspaceWindow
                 T(preview.UndatedCount > 0 ? $"{preview.UndatedCount} 条无法推断日期，将归档到下方指定日期。" : "日期已从归档或文件名前缀读取。", 12),
                 T("无日期记录的归档日期"), date, T("导入方式"), mode, T("导入前自动备份；合并遇到同名而内容不同的记录时会停止。", 11), error,
                 Row(8, B("取消", () => dialog!.Close(), "quiet"), execute)));
-            await dialog.ShowDialog(this);
+            await dialog!.ShowAsync();
         }
         catch (Exception ex) { Toast("无法导入：" + ex.Message, true); }
     }

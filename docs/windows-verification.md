@@ -1,5 +1,7 @@
 # Windows 验收记录（2026-10-24）
 
+> **2026-10-25 结构变更**：本文记录的是 `DesktopWorkspaceWindow` 直接构建界面的版本。此后界面整体下沉为跨平台控件 `Desktop/DesktopWorkspaceView : UserControl`（桌面薄壳 `DesktopWorkspaceWindow` 只剩 33 行），因此：窗口级行为（`ShowDialog` 子窗口、`Closing` 退出备份）现在由薄壳承担，控件级行为（渲染、导航、弹层降级）由视图承担。`DesktopWorkspaceUiTests` 的 13 条界面用例仍全部通过，作为该等价性的回归证据。
+
 ## 已验证
 
 - 桌面源码已发布到 `artifacts/windows`，可执行文件为 `VoiSlate.exe`。

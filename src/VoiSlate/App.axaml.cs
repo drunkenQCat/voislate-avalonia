@@ -18,9 +18,6 @@ namespace VoiSlate;
 
 public partial class App : Application
 {
-    /// <summary>主 VM 静态引用（设置页返回等非窗口场景；Avalonia 12 窗口为 TopLevelHost，as Window 不再可靠）。</summary>
-    public static ViewModels.MainViewModel? Main { get; private set; }
-
     private ServiceProvider? _services;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
@@ -75,15 +72,10 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // P8 上游：桌面改道 DesktopWorkspaceWindow（时间轴工作台 + 百炼语音），旧 MainWindow 壳仅剩 Android 同构使用。
-            var workspace = new Desktop.DesktopWorkspaceService(
-                new LiteDbScheduleStore(_services.GetRequiredService<LiteDbStore>()),
-                _services.GetRequiredService<ILogRepository>(),
-                _services.GetRequiredService<ISessionSettingsStore>(),
-                _services.GetRequiredService<ITimeProvider>(), new Desktop.LiteDbWorkspaceTransaction(_services.GetRequiredService<LiteDbStore>()));
+            // 桌面：工作台（时间轴 + 百炼语音）。控件本体 DesktopWorkspaceView 与 Android 共用。
+            var workspace = CreateWorkspace(_services);
             workspace.InitializeAsync().GetAwaiter().GetResult();
-            desktop.MainWindow = new Desktop.DesktopWorkspaceWindow(workspace, new Desktop.Speech.BailianSettingsStore(
-                _services.GetRequiredService<ISessionSettingsStore>(), new Desktop.Speech.WindowsTokenProtector()));
+            desktop.MainWindow = new Desktop.DesktopWorkspaceWindow(workspace, CreateSpeechSettings(_services));
 
             // DI-REGISTRATION (C keep) — Agent C 接管 App.axaml.cs 时全量保留本区域。
             desktop.Exit += (_, _) => OnShutdown();
@@ -100,175 +92,46 @@ public partial class App : Application
             //     （Avalonia.Controls.ApplicationLifetimes.IActivityApplicationLifetime）——主工程是纯
             //     net10.0 桌面 TFM、不引用 Avalonia.Android，桌面 lifetime（ClassicDesktop…）不实现该接口，
             //     故此分支对桌面完全惰性（桌面行为零变化）。
-            //  3) 不能把 MainWindow（Window）交给 MainViewFactory：Android 的 IWindowingPlatform 是
+            //  3) 不能把 Window 交给 MainViewFactory：Android 的 IWindowingPlatform 是
             //     WindowingPlatformStub，其 CreateWindow() 抛 NotSupportedException（new Window() 即崩），
-            //     必须返回普通 Control——见 CreateAndroidMainView（与 MainWindow.axaml 同构的导航壳）。
+            //     必须返回普通 Control——内容是 DesktopWorkspaceView（UserControl），弹窗走同控件的 overlay 层。
             //  4) 时序：AvaloniaAndroidApplication<TApp>.OnCreate（[Application] 类）先于 Activity 执行，
             //     SetupWithLifetime 触发本方法时 ApplicationLifetime 已是 IActivityApplicationLifetime，
             //     Activity 的 InitializeAvaloniaView 必然晚于 MainViewFactory 赋值（官方样本同此依赖）。
-            var mainViewModel = _services.GetRequiredService<MainViewModel>();
-            Main = mainViewModel;   // P7：设置页返回等非窗口场景的直连（Android 旧壳仍在用）
-            androidLifetime.MainViewFactory = () => CreateAndroidMainView(mainViewModel);
+            // 内容 = 与桌面同一套工作台界面（DesktopWorkspaceView），窄屏时它自己切成底部 Tab。
+            var workspace = CreateWorkspace(_services);
+            var speechSettings = CreateSpeechSettings(_services);
+            var view = new Desktop.DesktopWorkspaceView(workspace, speechSettings, captureFactory: null);
+            androidLifetime.MainViewFactory = () => view;
+            // 初始化（读库 + 迁移 + 首次 seed）放到后台，完成后再让视图重画一次：
+            // 进程启动 ANR 预算内不能同步做 IO，但空白壳先出、数据后到对用户是可接受的。
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await workspace.InitializeAsync();
+                    Avalonia.Threading.Dispatcher.UIThread.Post(view.Refresh);
+                    Log.Information("Android workspace initialized");
+                }
+                catch (Exception ex) { Log.Error(ex, "Android workspace initialization failed"); }
+            });
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    /// <summary>
-    /// Android 主视图：与 Views/MainWindow.axaml 同构的手机壳导航壳（AppBar 40px + 页面宿主 +
-    /// 底部 3 Tab）。设置入口在 AppBar 右上角（settings 齿轮 → NavigateCommand(settings)；
-    /// 设置页打开时 AppBar/底部导航按 IsAppBarVisible/IsTabBarVisible 隐藏，设置页自带返回头）。
-    /// 页面本身由 App.axaml 的 VM→View DataTemplate 渲染——与桌面共用同一套页面。
-    /// 维护约定：后续改动 MainWindow.axaml 的壳结构时须同步本方法。
-    /// </summary>
-    private static Control CreateAndroidMainView(MainViewModel mainViewModel)
-    {
-        // 与 MainWindow.axaml 三枚底部导航 PathIcon 逐字一致（保持视觉同一；顺序：计划/记录/场记，
-        // 识别测试页按迁移清单不迁移）。设置齿轮图标同 MainWindow.axaml。
-        IReadOnlyDictionary<string, string> iconData = new Dictionary<string, string>
-        {
-            [MainViewModel.SchedulePageKey] =
-                "M19,4H18V2H16V4H8V2H6V4H5C3.9,4 3,4.9 3,6V20C3,21.1 3.9,22 5,22H19C20.1,22 21,21.1 21,20V6C21,4.9 20.1,4 19,4Z M19,20H5V9H19V20Z",
-            [MainViewModel.RecordPageKey] =
-                "M12,14C13.66,14 15,12.66 15,11V5C15,3.34 13.66,2 12,2C10.34,2 9,3.34 9,5V11C9,12.66 10.34,14 12,14Z M18,11C18,14.53 15.06,17.44 11.53,17.5C8.08,17.56 5,14.93 5,11H3.13C3.13,14.66 6.31,17.66 10,17.9V21H14V17.9C17.69,17.66 20.87,14.66 20.87,11H18Z",
-            [MainViewModel.SlateLogPageKey] =
-                "M3,13H11V11H3ZM3,17H11V15H3ZM3,9H11V7H3ZM13,13H21V11H13ZM13,17H21V15H13ZM13,9H21V7H13Z",
-        };
-        const string gearIcon =
-            "M19.43,12.98C19.47,12.66 19.5,12.34 19.5,12C19.5,11.66 19.47,11.34 19.43,11.02L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.97 19.05,5.05L16.56,6.05C16.04,5.66 15.48,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2L10,2C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.52,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.97 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11.02C4.53,11.34 4.5,11.66 4.5,12C4.5,12.34 4.53,12.66 4.57,12.98L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.95C7.96,18.34 8.52,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22L14,22C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.48,18.68 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63ZM12,15.5C10.07,15.5 8.5,13.93 8.5,12C8.5,10.07 10.07,8.5 12,8.5C13.93,8.5 15.5,10.07 15.5,12C15.5,13.93 13.93,15.5 12,15.5Z";
+    /// <summary>工作台服务图：桌面与 Android 共用，避免两个平台各自拼装导致行为漂移。</summary>
+    private static Desktop.DesktopWorkspaceService CreateWorkspace(IServiceProvider services) => new(
+        new LiteDbScheduleStore(services.GetRequiredService<LiteDbStore>()),
+        services.GetRequiredService<ILogRepository>(),
+        services.GetRequiredService<ISessionSettingsStore>(),
+        services.GetRequiredService<ITimeProvider>(),
+        new Desktop.LiteDbWorkspaceTransaction(services.GetRequiredService<LiteDbStore>()));
 
-        var root = new Grid
-        {
-            RowDefinitions =
-            {
-                new RowDefinition(new GridLength(40)),
-                new RowDefinition(GridLength.Star),
-                new RowDefinition(GridLength.Auto),
-            },
-            DataContext = mainViewModel,
-        };
-
-        // ---- AppBar（40px #266489；标题 + 右上角设置齿轮）----
-        var appBar = new Border { Background = new SolidColorBrush(Color.Parse("#266489")), ZIndex = 5 };
-        Grid.SetRow(appBar, 0);
-        var appBarGrid = new Grid
-        {
-            ColumnDefinitions =
-            {
-                new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Auto),
-            },
-        };
-        appBarGrid.Children.Add(new TextBlock
-        {
-            Text = "VoiSlate",
-            FontSize = 17,
-            FontWeight = FontWeight.Medium,
-            Foreground = Brushes.White,
-            Margin = new Thickness(10, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        var settingsButton = new Button
-        {
-            Width = 40,
-            Height = 40,
-            Margin = new Thickness(0, 0, 2, 0),
-            Background = Brushes.Transparent,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            Content = new PathIcon
-            {
-                Data = StreamGeometry.Parse(gearIcon),
-                Width = 20,
-                Height = 20,
-                Foreground = Brushes.White,
-            },
-        };
-        settingsButton.Command = mainViewModel.NavigateCommand;
-        settingsButton.CommandParameter = MainViewModel.SettingsPageKey;
-        Grid.SetColumn(settingsButton, 1);
-        appBarGrid.Children.Add(settingsButton);
-        appBar.Child = appBarGrid;
-        appBar[!Visual.IsVisibleProperty] = new Binding(nameof(MainViewModel.IsAppBarVisible));
-        root.Children.Add(appBar);
-
-        // ---- 页面宿主：Content ↔ MainViewModel.CurrentPage ----
-        var pageHost = new ContentControl();
-        pageHost.Bind(ContentControl.ContentProperty, new Binding(nameof(MainViewModel.CurrentPage)));
-        Grid.SetRow(pageHost, 1);
-        root.Children.Add(pageHost);
-
-        // ---- 底部导航（3 Tab：计划 / 记录 / 场记；active 高亮同 MainWindow.axaml）----
-        var bottomNav = new Border
-        {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.Parse("#E0E0E0")),
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            ZIndex = 30,
-        };
-        Grid.SetRow(bottomNav, 2);
-        bottomNav[!Visual.IsVisibleProperty] = new Binding(nameof(MainViewModel.IsTabBarVisible));
-
-        var highlight = new PageKeyToBrushConverter();
-        var navGrid = new Grid
-        {
-            ColumnDefinitions =
-            {
-                new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Star),
-            },
-        };
-        string[] tabOrder = [MainViewModel.SchedulePageKey, MainViewModel.RecordPageKey, MainViewModel.SlateLogPageKey];
-        for (var i = 0; i < tabOrder.Length; i++)
-        {
-            var key = tabOrder[i];
-            var title = key == MainViewModel.RecordPageKey ? "记录"
-                : key == MainViewModel.SchedulePageKey ? "计划" : "场记";
-            var button = new Button
-            {
-                Command = mainViewModel.NavigateCommand,
-                CommandParameter = key,
-                CornerRadius = new CornerRadius(10),
-                Margin = new Thickness(5, 3),
-                Padding = new Thickness(0, 3),
-                Content = new StackPanel
-                {
-                    Children =
-                    {
-                        new PathIcon
-                        {
-                            Data = StreamGeometry.Parse(iconData[key]),
-                            Width = 20,
-                            Height = 20,
-                            HorizontalAlignment = HorizontalAlignment.Center,
-                        },
-                        new TextBlock
-                        {
-                            Text = title,
-                            FontSize = 11,
-                            HorizontalAlignment = HorizontalAlignment.Center,
-                        },
-                    },
-                },
-            };
-            // 与 MainWindow.axaml 同款“当前页高亮”（active 淡蓝底）。
-            button.Bind(
-                Button.BackgroundProperty,
-                new Binding(nameof(MainViewModel.CurrentPageKey))
-                {
-                    Converter = highlight,
-                    ConverterParameter = key,
-                });
-            Grid.SetColumn(button, i);
-            navGrid.Children.Add(button);
-        }
-
-        bottomNav.Child = navGrid;
-        root.Children.Add(bottomNav);
-        return root;
-    }
-
+    /// <summary>百炼设置：Windows 用 DPAPI 加密 Token，其它平台退到 base64 混淆（设置页会提示）。</summary>
+    private static Desktop.Speech.BailianSettingsStore CreateSpeechSettings(IServiceProvider services) => new(
+        services.GetRequiredService<ISessionSettingsStore>(),
+        OperatingSystem.IsWindows() ? new Desktop.Speech.WindowsTokenProtector() : new Desktop.Speech.PlainTokenProtector());
 
     private static void ConfigureServices(IServiceCollection services)
     {

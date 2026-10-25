@@ -19,7 +19,7 @@ VoiSlate 是**声音场记无纸化工具**（拍板场记）：记录每一条�
 | 技术栈 | .NET 10（SDK 10.0.400）+ Avalonia 12.1.1 + CommunityToolkit.Mvvm 8.4.2 + LiteDB 5.0.21 + CsvHelper 33 + Serilog + Microsoft.Extensions.DependencyInjection |
 | 目标平台 | 桌面 `net10.0`（✅ 主目标）+ Android `net10.0-android`（✅ 真机已验证，`a326284`） |
 | ASR/录音/震动/Toast | 接口先行，Mock 实现（`MockAsrService`/`NoopHapticsService`/`NoopToastService` 等） |
-| 测试 | 285/285 通过（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身） |
+| 测试 | 330 通过 / 6 跳过 / 336（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身；跳过的 6 条是 `WindowsOnlyFactAttribute`） |
 | 远程 | https://github.com/drunkenQCat/voislate-avalonia （main 分支） |
 
 ## 2. 目录地图
@@ -45,7 +45,8 @@ voislate-avalonia/
 │   │   ├── Infrastructure/    # LiteDbStore（开库/默认连接串/四集合）
 │   │   ├── Data/              # SeedData（空库播种两份生产场表）
 │   │   ├── ViewModels/        # 10 个 VM（其中 SlateLogPageViewModel 存在但未接入导航）
-│   │   ├── Views/             # 9 个 View：4 页面 + 3 对话框/窗口 + Converters
+│   │   ├── Desktop/           # ★ 唯一界面：DesktopWorkspaceView(UserControl) + 4 分部类 + 薄壳 Window + WorkspaceDialog
+│   │   ├── Views/             # 仅剩 Converters.cs（P7 的 16 个 .axaml 已于 2026-10-25 删除）
 │   │   ├── Controls/          # 16 个自研控件/逻辑（SlateWheel/SlideConfirmBar/DialFAB…）
 │   │   └── Themes/            # VoiSlatePalette.axaml（色板）+ Controls.axaml（控件默认样式）
 │   └── VoiSlate.Android/      # Android 壳工程（net10.0-android，仅入口，业务全在主工程）
@@ -79,8 +80,15 @@ voislate-avalonia/
 `src/VoiSlate/App.axaml.cs`（307 行）是本仓库信息密度最高的文件：
 1. **启动时序**（注释 ADR-008）：LiteDbStore.Open → `SeedService.EnsureSeededAsync` → `RecordingSessionViewModel.Initialization` → `ITakeFlowService.InitializeAsync` → 显示 UI。
 2. **DI 注册表**（`ConfigureServices`，摘要见 §5）。
-3. **Android 分支**（`IActivityApplicationLifetime`，接口在核心 Avalonia.Controls 包）：桌面路径同步 seed；Android 路径把 seed/初始化放进后台 `Task.Run`（deferred init，规避进程启动 ANR 预算），主线程只挂 `MainViewFactory = () => CreateAndroidMainView(mainViewModel)`。
-4. **`CreateAndroidMainView`**：与 `Views/MainWindow.axaml` **同构的代码化导航壳**（190px 左栏 `#F4F4F4` + 右侧 ContentControl↔CurrentPage；四枚 PathIcon 与桌面逐字一致；按钮背景经 `PageKeyToBrushConverter` 高亮）。**维护约定：改 MainWindow.axaml 的壳结构时必须同步本方法**。
+3. **桌面 / Android 共用同一套工作台控件**（2026-10 迁移）：`Desktop/DesktopWorkspaceView : UserControl` 是唯一界面实现，桌面由 33 行的 `DesktopWorkspaceWindow`（薄壳 Window）承载，Android 由
+   ```csharp
+   var view = new Desktop.DesktopWorkspaceView(workspace, speechSettings, captureFactory: null);
+   androidLifetime.MainViewFactory = () => view;                 // Android 不能 new Window
+   _ = Task.Run(async () => { await workspace.InitializeAsync(); Dispatcher.UIThread.Post(view.Refresh); }); // deferred init
+   ```
+   承载。**不再有第二份界面**——改界面只改 `DesktopWorkspaceView`，两端自动一致。
+4. **弹层双后端**（`Desktop/WorkspaceDialog.cs`）：`Dialog(...)` 在 Window 宿主下走 `ShowDialog`（桌面保留真实子窗口，13 条界面用例依赖它），无窗口宿主（Android）下走 `ForOverlay(_overlayLayer, ...)` 的遮罩层。`_overlayLayer` 挂在 `Render()` 之外，重渲染不丢弹层。
+5. **`IStorageProvider` 来自 `TopLevel.GetTopLevel(this)?.StorageProvider`**：桌面是系统文件选择器，Android 是 `Avalonia.Android.Platform.Storage.AndroidStorageProvider`（SAF）。保存/读取一律用 `OpenReadAsync`/`OpenWriteAsync` 流，**不要用 `TryGetLocalPath()`**（SAF 文档 URI 返回 null，仅备份目录选择这一处例外且已给出提示）。
 
 ## 5. DI 注册表摘要（App.axaml.cs ConfigureServices）
 
@@ -106,7 +114,7 @@ voislate-avalonia/
 # 前提：.NET SDK 10.0.400；Android 需 workload：dotnet workload install android
 # 桌面构建 / 测试（CI 同此）
 dotnet build VoiSlate.slnx -c Release        # 期望 0 warning 0 error
-dotnet test tests/VoiSlate.Tests -c Release  # 期望 285/285
+dotnet test tests/VoiSlate.Tests -c Release  # 期望 330 passed / 6 skipped（共 336）
 
 # 桌面运行
 dotnet run --project src/VoiSlate -c Release
@@ -140,7 +148,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
    - **`ResourceDictionary.Source` 已移除**：用 `MergeResourceInclude`（编译期合并；AOT 下不要用运行时 ResourceInclude）
    - **隐式 DataTemplate 必须放 `Application.DataTemplates`**，放 Resources 报 AVLN3000
 2. **Android 必须 AppCompat 主题**：`AvaloniaMainActivity` 继承 AppCompatActivity，Activity 主题必须 `@style/Theme.AppCompat.Light.NoActionBar`（平台主题 → 启动即 `IllegalStateException` 闪退）。这是真机验证才暴露的 bug（模拟器死于更早的 ANR 阶段）。
-3. **Android 不能 `new Window()`**：`IWindowingPlatform` 是 `WindowingPlatformStub`，CreateWindow 抛异常；`MainViewFactory` 必须返回普通 Control（`CreateAndroidMainView` 就是为此存在的）。
+3. **Android 不能 `new Window()`**：`IWindowingPlatform` 是 `WindowingPlatformStub`，CreateWindow 抛异常；`MainViewFactory` 必须返回普通 Control（为此界面全部落在 `DesktopWorkspaceView : UserControl` 上，弹窗走 `WorkspaceDialog.ForOverlay`）。
 4. **Android 进程启动 ANR 预算**：TCG 软件模拟（无 KVM）下任何 .NET Android 应用都超线被杀（已用冒烟应用证实是环境性问题，与代码无关）；真机无此问题。Android 分支的 deferred init 是为该场景保留的保险。
 5. **NETSDK1150**：WinExe 主工程被 Android 工程引用 → 见 §6 csproj 处理。
 6. **Avalonia.Diagnostics 版本滞后**：11.x 与 Avalonia 12.1.1 不配套，暂未引入（csproj 注释说明）。
@@ -152,9 +160,15 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 
 ## 8. 页面 / 窗口 / 转换器 / 主题速查
 
-**导航壳**（`Views/MainWindow.axaml` + App.axaml.cs 的 Android 代码镜像）：Grid `190,*`；左栏 `#F4F4F4` Border + DockPanel（标题 VoiSlate `#0067A0` + 4 个导航按钮：记录/计划/场记/设置，PathIcon 18×18）；右侧 `ContentControl ↔ CurrentPage`。**页面切换 = MainViewModel.NavigateCommand 换 CurrentPage → App.axaml DataTemplate 渲染**；Record 页每次新建（Scoped 工厂），其余页复用单例。**无 TabControl、无键盘快捷键、无顶部栏**（仅 IHardwareKeyService 音量键路径，桌面 Noop）。
+**工作台外壳**（`Desktop/DesktopWorkspaceView.cs#Render`）：`_root` 内一层 `frame = Grid{ RowDefinitions = "*,Auto" }`；`_compact = Bounds.Width < 820`。
+- 宽屏：左栏 184px（`BuildRail`：标题/副标题 + 记录/计划/场记/⚙工程与偏好 + 工程名/进度），右列 `_host.Content` 换页。
+- 窄屏（手机/小窗）：左栏列宽归零并隐藏，第 2 行插入 `BuildBottomNav()`（四等分 97px、高 56、选中 `#31574C`、`AutomationId = navb-record/navb-plan/navb-log/navb-settings`）。**注意**：主题给 `Button` 的默认 `HorizontalAlignment` 是 `Left`，导航按钮必须显式 `Stretch`，否则宽度只剩文字宽（实测 24px，触屏点不中）。
+- 页面切换 = `Navigate(key)`（把 key 归一为小写后置 `_page` 再 `Render()`）；键盘 `HandleShortcut`（Ctrl+1/2/3、Ctrl+Shift+Z、Ctrl+Enter、Esc）由薄壳 Window 以 Tunnel 方式转交，Android 无键盘路径。
+- 窄屏留白统一走 `PagePad(horizontal, vertical)`（compact 时夹到 14/12）。
 
-| 页面 | ViewModel | 关键交互 |
+> **2026-10-25 迁移**：下表描述的是**已删除**的 P7 手机壳（`Views/{MainWindow,RecordView,ScheduleView,SlateLogView,SettingsView,LogEditorWindow,QuickViewLogWindow,SmallEditDialog}.axaml`，16 个文件）。桌面与 Android 现统一走 `Desktop/DesktopWorkspaceView`（记录/计划/时间轴 + 工程与偏好四项），下表仅作历史对照与交互行为参考——这些交互行为在 `DesktopWorkspace*.cs` 里以代码构建的方式一一对应。
+
+| 页面（已删除） | 原 ViewModel | 关键交互（行为仍在工作台里） |
 |---|---|---|
 | RecordView | RecordViewModel（Scoped） | Loaded/Unloaded → Activate/Deactivate；2×DialFAB（SetOkTake/SetOkShot）；FileCounter.EditRequested → SmallEditDialog → Edit{FileNumber,Linker,Prefix}Async；速览 → RefreshQuickNotesAsync + QuickViewLogWindow；AdvanceTake(Normal/Fake/End)/RewindTake/ToggleLink/ToggleAsr；双备注 TwoWay + SlideConfirmBar |
 | ScheduleView | ScheduleViewModel | 导入 CSV（StorageProvider→ImportCsvAsync）、AddScene/AddShot、SmallEditDialog 编镜备注→ApplyShotEdit、DeleteItem/MoveItem、左右 ListBox 联动 |
@@ -255,7 +269,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 - [ ] 存储读写走 Repository/Store 接口；日志/文件号变更只经 ITakeFlowService
 - [ ] 新增 XAML：ControlTemplate 用 `:` 类型引用；字典合并用 MergeResourceInclude；模板进 DataTemplates
 - [ ] Android Manifest 主题保持 AppCompat 系列
-- [ ] 改了 MainWindow.axaml 壳 → 同步 `App.axaml.cs#CreateAndroidMainView`
+- [ ] 改界面只改 `Desktop/DesktopWorkspaceView.cs`（+ 4 个分部类）；窄屏改动后跑 `WorkspacePhoneLayoutTests`（390×840 下底部 Tab 必须 4 等分、高 ≥44、三页无控件越界）
 - [ ] 新增源文件放 src/VoiSlate 对应子目录（SDK glob 免改 csproj）；测试放 tests/VoiSlate.Tests 对应子目录，**只新增文件不改既有文件**
 - [ ] 桌面回归：`dotnet build` 0w/0e + `dotnet test` 285/285
 - [ ] Android 改动 → 发 arm64 APK → 真机安装启动验证（崩溃查 logcat FATAL）

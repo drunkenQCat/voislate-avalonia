@@ -3,7 +3,7 @@ using Avalonia.Layout;
 
 namespace VoiSlate.Desktop;
 
-public sealed partial class DesktopWorkspaceWindow
+public sealed partial class DesktopWorkspaceView
 {
     private Control BuildNamingSettings()
     {
@@ -25,11 +25,11 @@ public sealed partial class DesktopWorkspaceWindow
     }
     private async void ShowTracks()
     {
-        Window? dialog = null;
+        WorkspaceDialog? dialog = null;
         var tracks = new TextBox { Text = string.Join("，", _service.Draft.Tracks ?? _service.Shot?.Note.Objects ?? []), AcceptsReturn = true, MinHeight = 80, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
         var error = T("", 12);
         dialog = Dialog("人物 / 录音轨道", Stack(10, T("用逗号分隔；保存场记时记录当前轨道快照。"), tracks, error,
             B("保存", async () => { try { await _service.SetTracksAsync(tracks.Text ?? ""); dialog!.Close(); } catch (Exception ex) { error.Text = ex.Message; } }, "primary")));
-        await dialog.ShowDialog(this);
+        await dialog!.ShowAsync();
     }
 }
