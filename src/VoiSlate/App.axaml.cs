@@ -181,7 +181,6 @@ public partial class App : Application
         });
 
         // ==== 集成接线（C 合入后按 B 真实 VM 构造器重写；新增缺补服务生产实现）====
-        services.AddSingleton<IHardwareKeyService, NoopHardwareKeyService>();
         services.AddSingleton<IExportService, ExportService>();
         // 计划页数据面：真实实现（LiteDb 落库 + SeedData 播种：1A 万星园 / 2A 洛肯实验室）。
         // 换用 LiteDbScheduleStore 后计划页不再空表（对齐 voislate-html 计划页数据）。

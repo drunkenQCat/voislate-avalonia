@@ -37,7 +37,6 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private bool _holding, _held;
     private Action? _finishVoice;
     private readonly bool _voiceCaptureAvailable;
-    private readonly IHardwareKeyService? _hardwareKeys;
 
     public DesktopWorkspaceView(DesktopWorkspaceService service, Speech.BailianSettingsStore speechSettings,
         Speech.BailianRealtimeClient? speechClient = null, Func<int, Speech.IPcmCapture>? captureFactory = null)
@@ -49,10 +48,9 @@ public sealed partial class DesktopWorkspaceView : UserControl
         Classes.Add("workspace");
         Background = Brush("#F2F5F3");
         _service.Changed += OnChanged;
-        DetachedFromVisualTree += (_, _) => { _service.Changed -= OnChanged; _toastTimer?.Stop(); _hold.Stop(); _finishVoice?.Invoke(); if (_hardwareKeys is not null) _hardwareKeys.KeyPressed -= OnHardwareKey; };
+        DetachedFromVisualTree += (_, _) => { _service.Changed -= OnChanged; _toastTimer?.Stop(); _hold.Stop(); _finishVoice?.Invoke(); HardwareKeys.Pressed -= OnHardwareKey; };
         // 音量键：Android 由 MainActivity 注入实现（原版就是这样记条/撤回，单手戴手套也能用）；桌面为 null，走键盘快捷键。
-        _hardwareKeys = HardwareKeys.Current;
-        if (_hardwareKeys is not null) _hardwareKeys.KeyPressed += OnHardwareKey;
+        HardwareKeys.Pressed += OnHardwareKey;
         _hold.Tick += (_, _) => { _hold.Stop(); if (_holding) { _held = true; Run(() => _service.SaveTakeAsync()); } };
         SizeChanged += (_, _) => { var compact = Bounds.Width < 820; if (compact != _compact) { _compact = compact; Render(); } };
         AddHandler(InputElement.KeyDownEvent, (_, e) => HandleShortcut(e), Avalonia.Interactivity.RoutingStrategies.Tunnel);

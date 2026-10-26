@@ -100,3 +100,12 @@
 **未动（单独裁定）**：`IScheduleBook` / `LiteDbScheduleBook` 仍注册——`TakeFlowService` 的三个 Provider 委托（`SceneLabelProvider`/`ShotLabelProvider`/`CurrentObjectsProvider`）仍从它取数；`ITakeFlowService` 在桌面分支仍不初始化、Android 分支仍 `InitializeAsync`。两者的去留建议与「legacy 写入器是否还要保留」一起决策。
 
 **验收**：`dotnet build VoiSlate.slnx` 0 error；`dotnet test` **285 passed / 6 skipped / 291**；`dotnet build src/VoiSlate.Android/VoiSlate.Android.csproj` 成功。
+
+## 10. 音量键通道的真机验证（2026-10-26，RMX5060）
+
+**结论：真机通过。** 两次 `KEYCODE_VOLUME_UP` 使文件号 `261026-T002 → T004`（保存了 T002、T003），一次 `KEYCODE_VOLUME_DOWN` 回到 `T003`（撤回最后一条），时间轴「今天 3」与文件号一致，logcat 无 FATAL/ANR。
+
+过程中发现两个必须记住的坑（都写进 `GUIDE.md` §8 了）：
+
+1. **只重写 `OnKeyDown` 收不到音量键** —— Avalonia 的 Android 视图先消费按键，第一版真机表现是「按了完全没反应、截图前后 0 像素差异」。改为重写 `MainActivity.DispatchKeyEvent`。
+2. **不能用实例注册表 + `Current` 属性** —— Android 上 Avalonia 的 `Application` 初始化早于 `MainActivity.OnCreate`，视图构造订阅时 `HardwareKeys.Current` 还是 null。logcat 里的 `handlers=0` 就是证据。现在 `VoiSlate.Services.HardwareKeys` 是静态事件（`Pressed`/`Raise`/`HasHandlers`），`IHardwareKeyService` 接口与 `NoopHardwareKeyService` 一并删除（DI 注册也删了，它随 P7 的 RecordViewModel 一起失去消费者）。

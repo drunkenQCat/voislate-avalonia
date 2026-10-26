@@ -14,12 +14,6 @@ namespace VoiSlate.Tests.Desktop;
 /// </summary>
 public sealed partial class DesktopWorkspaceTests
 {
-    private sealed class FakeHardwareKeys : IHardwareKeyService
-    {
-        public event Action<HardwareKey>? KeyPressed;
-        public void Raise(HardwareKey key) => KeyPressed?.Invoke(key);
-    }
-
     [Fact]
     public async Task Legacy_project_naming_linker_and_draft_are_adopted_on_first_launch()
     {
@@ -172,15 +166,13 @@ public sealed partial class DesktopWorkspaceTests
     public Task Record_page_notes_stay_with_their_own_take() => RunUi(async () =>
     {
         using var f = await Create();
-        var keys = new FakeHardwareKeys();
-        HardwareKeys.Current = keys;
         var window = await WindowFor(f);
         try
         {
             var box = Control<TextBox>(window, "recording-note");
             box.Text = "第一条备注";
             await Until(() => f.Workspace.Draft.RecordingNote == "第一条备注");
-            keys.Raise(HardwareKey.VolumeUp);
+            HardwareKeys.Raise(HardwareKey.VolumeUp);
             await Until(() => f.Workspace.Logs.Count == 1);
 
             // 记条后输入框必须回到空（R1：上一条备注不能被写进下一条）
@@ -189,34 +181,32 @@ public sealed partial class DesktopWorkspaceTests
 
             Control<TextBox>(window, "recording-note").Text = "第二条备注";
             await Until(() => f.Workspace.Draft.RecordingNote == "第二条备注");
-            keys.Raise(HardwareKey.VolumeUp);
+            HardwareKeys.Raise(HardwareKey.VolumeUp);
             await Until(() => f.Workspace.Logs.Count == 2);
 
             Assert.Equal("第一条备注", f.Workspace.Logs[0].Item.TkNote);
             Assert.Equal("第二条备注", f.Workspace.Logs[1].Item.TkNote);
         }
-        finally { HardwareKeys.Current = null; window.Close(); }
+        finally { window.Close(); }
     });
 
     [Fact]
     public Task Volume_up_saves_a_take_and_volume_down_undoes_it() => RunUi(async () =>
     {
         using var f = await Create();
-        var keys = new FakeHardwareKeys();
-        HardwareKeys.Current = keys;
         try
         {
             var window = await WindowFor(f);
             try
             {
-                keys.Raise(HardwareKey.VolumeUp);
+                HardwareKeys.Raise(HardwareKey.VolumeUp);
                 await Until(() => f.Workspace.Logs.Count == 1);
-                keys.Raise(HardwareKey.VolumeDown);
+                HardwareKeys.Raise(HardwareKey.VolumeDown);
                 await Until(() => f.Workspace.Logs.Count == 0);
             }
             finally { window.Close(); }
         }
-        finally { HardwareKeys.Current = null; }
+        finally { }
     });
 
     [Fact]

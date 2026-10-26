@@ -26,14 +26,19 @@ public class MainActivity : AvaloniaMainActivity
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         // 必须早于 Avalonia 建内容：DesktopWorkspaceView 在构造时会读 PcmCapture.Factory
-        // 与 HardwareKeys.Current 来决定「语音标注可用 / 降级」和音量键通道，晚注册就会永远走降级分支。
+        // 来决定「语音标注可用 / 降级」；音量键走静态事件，与注册时机无关。
         AndroidMic.CurrentActivity = this;
         AndroidMic.Register();
-        HardwareKeys.Current = HardwareKeysService;
         base.OnCreate(savedInstanceState);
     }
 
-    public override bool OnKeyDown(Keycode keyCode, KeyEvent? e) => HardwareKeysService.Handle(keyCode) || base.OnKeyDown(keyCode, e);
+    // 音量键必须在 DispatchKeyEvent 拦：Avalonia 的 Android 视图会先消费按键，
+    // 只重写 OnKeyDown 收不到（真机实测：日志里 onKeyDown 一次都没触发）。
+    public override bool DispatchKeyEvent(KeyEvent? e)
+    {
+        if (e is not null && e.Action == KeyEventActions.Down && HardwareKeysService.Handle(e.KeyCode)) return true;
+        return base.DispatchKeyEvent(e);
+    }
 
     /// <summary>申请 RECORD_AUDIO，等用户点完系统弹窗（最多 60s）后返回是否授权。</summary>
     internal static Task<bool> RequestRecordAudioAsync()

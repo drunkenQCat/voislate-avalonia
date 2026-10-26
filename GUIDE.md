@@ -189,6 +189,11 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 
 **CI / 脚本**：`.github/workflows/ci.yml` 单 job（restore/build/test，仅 slnx，**不含 Android**）；`scripts/p2-merge.sh` P2 历史脚本（check + merge-a/e/d/b/c + verify）。
 
+#### 音量键（Android）两个真机级陷阱
+
+1. **只重写 `OnKeyDown` 收不到音量键**——Avalonia 的 Android 视图会先消费按键。必须在 `MainActivity.DispatchKeyEvent` 里拦：`if (e is not null && e.Action == KeyEventActions.Down && HardwareKeysService.Handle(e.KeyCode)) return true;`（返回 true 才不触发系统音量条）。
+2. **不能用「实例注册表 + `Current` 属性」**——Android 上 Avalonia 的 `Application` 初始化早于 `MainActivity.OnCreate`，视图构造时读 `Current` 必然是 null，真机表现是 `handlers=0`（键到了 `DispatchKeyEvent` 却没人响应，界面毫无反应）。现在 `VoiSlate.Services.HardwareKeys` 是**静态事件**（`Pressed` / `Raise` / `HasHandlers`），与平台实现何时注册无关；`AndroidHardwareKeyService` 只负责把 `Keycode.VolumeUp/Down` 映射后 `HardwareKeys.Raise(...)`。
+
 ## 9. 模块地图（Services / ViewModels / Controls / 数据层）
 
 ### 9.1 Services（25 个文件；接口与实现多在同文件）
