@@ -71,14 +71,22 @@ public sealed partial class DesktopWorkspaceTests
         public async IAsyncEnumerable<string> ReceiveAsync([EnumeratorCancellation] CancellationToken ct) { await foreach (var value in _events.Reader.ReadAllAsync(ct)) yield return value; }
         public ValueTask DisposeAsync() { Disposed = true; _events.Writer.TryComplete(); return ValueTask.CompletedTask; }
     }
-    private static BailianSettingsStore SpeechSettings(Fixture f) => new(new LiteDbSessionSettingsStore(f.Db), new WindowsTokenProtector());
+    /// <summary>
+    /// Token 保护器按平台取，与 App.axaml.cs 的 CreateSpeechSettings 同一套判断：Windows 用 DPAPI，
+    /// 其它平台退回 base64 混淆。此前这里硬写 WindowsTokenProtector，于是任何保存过 Token 的界面用例
+    /// 在 ubuntu 上都会抛 PlatformNotSupportedException，只能整体标 [WindowsOnlyFact]，
+    /// 摇杆这类纯 UI 回归就被顺手 Skip 掉了。
+    /// </summary>
+    private static BailianSettingsStore SpeechSettings(Fixture f) =>
+        new(new LiteDbSessionSettingsStore(f.Db),
+            OperatingSystem.IsWindows() ? new WindowsTokenProtector() : new PlainTokenProtector());
     private static async Task<DesktopWorkspaceWindow> WindowFor(Fixture f, UiTransport? transport = null, UiCapture? capture = null)
     {
         await f.Workspace.SetBackupPreferencesAsync(false, "");
         var window = new DesktopWorkspaceWindow(f.Workspace, SpeechSettings(f), transport is null ? null : new(() => transport), capture is null ? null : _ => capture);
         window.Show(); Dispatcher.UIThread.RunJobs(); return window;
     }
-    [WindowsOnlyFact]
+    [Fact]
     public Task Ui_token_can_be_saved_masked_and_reopened_without_exposing_it_in_backup() => RunUi(async () =>
     {
         using var f = await Create(); var window = await WindowFor(f);
@@ -92,12 +100,14 @@ public sealed partial class DesktopWorkspaceTests
             Assert.DoesNotContain("bailian", f.Workspace.ExportJson(), StringComparison.OrdinalIgnoreCase);
             CaptureFrame(dialog, "settings-bailian"); dialog.Close();
             Invoke(Button(window, "⚙ 工程与偏好")); dialog = Assert.Single(window.OwnedWindows);
-            Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text?.Contains("Token 已加密保存") == true);
+            // 文案必须如实交代存储强度：Windows 是 DPAPI 真加密，其它平台只是 base64 混淆。
+            var savedNote = OperatingSystem.IsWindows() ? "Token 已加密保存" : "Token 已保存（本平台只做混淆，未加密）";
+            Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text?.Contains(savedNote) == true);
             dialog.Close();
         }
         finally { window.Close(); }
     });
-    [WindowsOnlyFact]
+    [Fact]
     public Task Ui_voice_previews_then_replaces_final_once_in_selected_annotation() => RunUi(async () =>
     {
         using var f = await Create(); await SpeechSettings(f).SaveAsync("sk-ui-test-only", "", 0);
@@ -119,7 +129,7 @@ public sealed partial class DesktopWorkspaceTests
         }
         finally { window.Close(); }
     });
-    [WindowsOnlyFact]
+    [Fact]
     public Task Ui_cancel_while_final_is_pending_cannot_write_late_results_into_another_shot() => RunUi(async () =>
     {
         using var f = await Create(); await SpeechSettings(f).SaveAsync("sk-ui-test-only", "", 0);
@@ -135,7 +145,7 @@ public sealed partial class DesktopWorkspaceTests
         }
         finally { window.Close(); }
     });
-    [WindowsOnlyTheory]
+    [Theory]
     [InlineData(0, "cancel")]
     [InlineData(-20, "cancel")]
     [InlineData(20, "cancel")]

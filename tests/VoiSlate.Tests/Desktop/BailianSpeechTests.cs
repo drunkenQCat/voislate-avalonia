@@ -132,6 +132,12 @@ public sealed class BailianSpeechTests
         await speech.SaveAsync("sk-replacement", "", 0); Assert.Equal("sk-replacement", (await speech.LoadAsync()).Token);
         await speech.ClearTokenAsync(); Assert.Empty((await speech.LoadAsync()).Token);
     }
+    [Fact]
+    public void Token_protectors_report_whether_they_really_encrypt()
+    {
+        Assert.False(new PlainTokenProtector().IsEncrypted);
+        if (OperatingSystem.IsWindows()) Assert.True(new WindowsTokenProtector().IsEncrypted);
+    }
     private sealed class Capture : IPcmCapture
     {
         private readonly Channel<byte[]> _audio = Channel.CreateUnbounded<byte[]>();

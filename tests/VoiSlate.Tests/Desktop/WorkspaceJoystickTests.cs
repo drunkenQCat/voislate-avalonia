@@ -9,7 +9,7 @@ namespace VoiSlate.Tests.Desktop;
 
 public sealed partial class DesktopWorkspaceTests
 {
-    [WindowsOnlyFact]
+    [Fact]
     public Task Ui_joystick_track_does_not_start_recording() => RunUi(async () =>
     {
         using var f = await Create(); await SpeechSettings(f).SaveAsync("sk-ui-test-only", "", 0);
@@ -28,7 +28,7 @@ public sealed partial class DesktopWorkspaceTests
         finally { window.Close(); }
     });
 
-    [WindowsOnlyFact]
+    [Fact]
     public Task Ui_joystick_return_from_edge_cancels_and_animates_home() => RunUi(async () =>
     {
         using var f = await Create(); await SpeechSettings(f).SaveAsync("sk-ui-test-only", "", 0);
@@ -52,7 +52,7 @@ public sealed partial class DesktopWorkspaceTests
         finally { window.Close(); }
     });
 
-    [WindowsOnlyFact]
+    [Fact]
     public Task Ui_joystick_waits_at_edge_then_animates_home_after_final() => RunUi(async () =>
     {
         using var f = await Create(); await SpeechSettings(f).SaveAsync("sk-ui-test-only", "", 0);

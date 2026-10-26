@@ -17,9 +17,16 @@ public sealed record BailianOptions(string Token, string WorkspaceId = "", int D
         if (DeviceNumber < 0) throw new InvalidOperationException("请选择有效的麦克风");
     }
 }
-public interface ITokenProtector { string Protect(string value); string Unprotect(string value); }
+public interface ITokenProtector
+{
+    /// <summary>true 表示真的加密（DPAPI）；false 表示只做了混淆，界面必须如实说明。</summary>
+    bool IsEncrypted { get; }
+    string Protect(string value);
+    string Unprotect(string value);
+}
 public sealed class WindowsTokenProtector : ITokenProtector
 {
+    public bool IsEncrypted => true;
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("VoiSlate.Bailian.v1");
     public string Protect(string value)
     {
@@ -39,6 +46,7 @@ public sealed class WindowsTokenProtector : ITokenProtector
 public sealed class PlainTokenProtector : ITokenProtector
 {
     private const string Prefix = "plain1:";
+    public bool IsEncrypted => false;
     public string Protect(string value) => Prefix + Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
     public string Unprotect(string value)
     {
@@ -51,6 +59,8 @@ public sealed class PlainTokenProtector : ITokenProtector
 public sealed class BailianSettingsStore(ISessionSettingsStore settings, ITokenProtector protector)
 {
     public const string TokenKey = "desktop.bailian.protected-token.v1";
+    /// <summary>当前平台的 Token 存储是否真加密（false 时界面必须提示「只是混淆」）。</summary>
+    public bool TokenIsEncrypted => protector.IsEncrypted;
     public async Task<BailianOptions> LoadAsync()
     {
         var encrypted = await settings.GetStringAsync(TokenKey, "");

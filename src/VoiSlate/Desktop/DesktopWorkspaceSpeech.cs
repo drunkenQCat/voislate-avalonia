@@ -272,6 +272,12 @@ public sealed partial class DesktopWorkspaceView
         return Stack(6, new Viewbox { Width = 96, Height = 56, Child = joy,
             HorizontalAlignment = HorizontalAlignment.Center }, preview);
     }
+    /// <summary>
+    /// Token 存储说明必须如实：Windows 走 DPAPI 是真加密，其它平台（Android/Linux）
+    /// 只是 base64 混淆，能被读到本地存储的人解出 —— 不能一律说「已加密保存」。
+    /// </summary>
+    private string SavedNote(string suffix) =>
+        (_speechSettings.TokenIsEncrypted ? "Token 已加密保存" : "Token 已保存（本平台只做混淆，未加密）") + suffix;
     private Control BuildSpeechSettings()
     {
         var token = new TextBox { PasswordChar = '●', PlaceholderText = "粘贴北京地域百炼 API Key；留空保留原 Token" };
@@ -287,7 +293,7 @@ public sealed partial class DesktopWorkspaceView
             loaded = _speechSettings.LoadAsync().GetAwaiter().GetResult();
             workspace.Text = loaded.WorkspaceId;
             microphones.SelectedIndex = loaded.DeviceNumber < devices.Count ? loaded.DeviceNumber : devices.Count > 0 ? 0 : -1;
-            status.Text = (loaded.Token.Length > 0 ? "Token 已加密保存；输入新值可替换。" : "尚未配置 Token。") + (devices.Count == 0 ? "未发现麦克风。" : "");
+            status.Text = (loaded.Token.Length > 0 ? SavedNote("；输入新值可替换。") : "尚未配置 Token。") + (devices.Count == 0 ? "未发现麦克风。" : "");
         }
         catch (Exception ex) { status.Text = ex.Message; }
         var save = B("保存语音设置", async () =>
@@ -296,7 +302,7 @@ public sealed partial class DesktopWorkspaceView
             {
                 await _speechSettings.SaveAsync(token.Text, workspace.Text ?? "", Math.Max(0, microphones.SelectedIndex));
                 token.Text = ""; loaded = await _speechSettings.LoadAsync();
-                status.Text = loaded.Token.Length > 0 ? "Token 已加密保存，语音设置立即生效。" : "语音设置已保存；请填写 Token 后开始识别。";
+                status.Text = loaded.Token.Length > 0 ? SavedNote("，语音设置立即生效。") : "语音设置已保存；请填写 Token 后开始识别。";
             }
             catch (Exception ex) { status.Text = ex.Message; }
         });
@@ -355,7 +361,9 @@ public sealed partial class DesktopWorkspaceView
             buttons.Children.Add(button);
         }
         return Stack(10, T("百炼语音识别", 16, "#45654D", true),
-            T("北京地域 · 实时识别；按住话筒时上传音频。Token 仅供本机当前 Windows 用户使用，不包含在 JSON 导出中。", 11),
+            T("北京地域 · 实时识别；按住话筒时上传音频。" + (_speechSettings.TokenIsEncrypted
+                ? "Token 由 Windows DPAPI 绑定当前用户加密保存，不包含在 JSON 导出中。"
+                : "Token 只存在于本机应用数据中（仅混淆、未加密），不包含在 JSON 导出中。"), 11),
             T("Token（API Key）"), token, T("业务空间（可选）"), workspace, T("麦克风"), microphones, status, buttons);
     }
 }
