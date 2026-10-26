@@ -82,6 +82,17 @@ public sealed partial class DesktopWorkspaceView
         var leftHint = T("≪ 录音", 10, "#8C9AA3"); var rightHint = T("镜头 ≫", 10, "#8C9AA3");
         hints.Children.Add(leftHint);
         rightHint.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(rightHint, 1); hints.Children.Add(rightHint); track.Children.Add(hints);
+        // 红→绿填充条：照抄 Flutter 原版 sliderBackground 的视觉契约——从左边长出、随手指位置由红渐变到绿，
+        // 提醒「左边写录音标注、右边写镜头标注」。原版靠 isVisible 取反控制（按下即隐藏），这里改成拖动时才显示。
+        var fill = new Border
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+            CornerRadius = new CornerRadius(8),
+            IsHitTestVisible = false,
+            Width = 0,
+            Background = Brush("#EF9A9A")
+        };
+        track.Children.Add(fill);
         var knob = B("开始语音标注", () => { }, "purple", "voice-joystick");
         Control Mic() => new PathIcon { Data = Geometry.Parse("M12,14C13.66,14 15,12.66 15,11V5C15,3.34 13.66,2 12,2C10.34,2 9,3.34 9,5V11C9,12.66 10.34,14 12,14 M18,11C18,14.53 15.06,17.44 11.53,17.5C8.08,17.56 5,14.93 5,11H3.13C3.13,14.66 6.31,17.66 10,17.9V21H14V17.9C17.69,17.66 20.87,14.66 20.87,11H18"), Width = 25, Height = 25, Foreground = Brushes.White };
         knob.Content = Mic(); knob.Width = 58; knob.Height = 58; knob.CornerRadius = new CornerRadius(29);
@@ -92,26 +103,39 @@ public sealed partial class DesktopWorkspaceView
         bool active = false, processing = false; int generation = 0; double start = 0; string? target = null;
         string beforeRec = "", beforeShot = "", scene = "", shot = "";
         var limit = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
+        // 两色线性插值（原版 calculateBackground 用 Color.alphaBlend 混红绿，这里直接插值更直观）。
+        static IBrush Mix(string from, string to, double t)
+        {
+            var a = Color.Parse(from); var b = Color.Parse(to);
+            t = Math.Clamp(t, 0, 1);
+            byte L(byte x, byte y) => (byte)Math.Round(x + (y - x) * t);
+            return new SolidColorBrush(Color.FromRgb(L(a.R, b.R), L(a.G, b.G), L(a.B, b.B)));
+        }
+
         void Reset()
         {
             var from = (knob.RenderTransform as TranslateTransform)?.X ?? 0;
             active = processing = false; limit.Stop(); knob.Content = Mic();
             knob.Background = Brush("#C6A4D4"); knob.Opacity = _voiceCaptureAvailable ? 1 : 0.45;
             leftHint.Foreground = Brush("#8C9AA3"); rightHint.Foreground = Brush("#8C9AA3");
+            fill.Width = 0; fill.Background = Brush("#EF9A9A");
             SpringBack(from);
         }
-        // 松手回弹：6 帧三次缓出。不用 Transitions 是为了拖动期间零延迟（挂了过渡滑块会追不上手指）。
+        // 松手回弹：沿用 Flutter 原版 AnimatedPositioned 的 200ms + Curves.easeInExpo（起步慢、收尾快）。
+        // 用逐帧 DispatcherTimer 而不是 Transitions，是为了拖动期间零延迟（挂了过渡滑块会追不上手指）。
         void SpringBack(double from)
         {
             if (Math.Abs(from) < 0.5) { knob.RenderTransform = null; return; }
-            var step = 0;
-            var ticker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+            const int durationMs = 200, frameMs = 16;
+            var elapsed = 0;
+            var ticker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(frameMs) };
             ticker.Tick += (_, _) =>
             {
-                step++;
-                var eased = 1 - Math.Pow(1 - (double)step / 6, 3);
+                elapsed += frameMs;
+                var t = Math.Min(1d, elapsed / (double)durationMs);
+                var eased = t <= 0 ? 0 : Math.Pow(2, 10 * (t - 1)); // Curves.easeInExpo
                 knob.RenderTransform = new TranslateTransform(from * (1 - eased), 0);
-                if (step < 6) return;
+                if (t < 1) return;
                 ticker.Stop(); knob.RenderTransform = null;
             };
             ticker.Start();
@@ -203,6 +227,10 @@ public sealed partial class DesktopWorkspaceView
             if (!active) return;
             var delta = Math.Clamp(x - start, -55, 55);
             knob.RenderTransform = new TranslateTransform(delta, 0);
+            // 填充条：宽度 = 从左边到滑块中心，颜色按行程 0(红 #EF9A9A) → 1(绿 #A5D6A7) 线性插值。
+            var progress = (delta + 55) / 110d;
+            fill.Width = Math.Max(0, 55 + delta);
+            fill.Background = Mix("#EF9A9A", "#A5D6A7", progress);
             var next = delta < -24 ? "rec" : delta > 24 ? "shot" : null;
             // 锁定即变色：手指还在屏幕上就能看到松手会写进哪一栏。
             leftHint.Foreground = Brush(next == "rec" ? "#1F6F86" : "#8C9AA3");
