@@ -158,14 +158,19 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 
 ## 8. 页面 / 窗口 / 转换器 / 主题速查
 
-**工作台外壳**（`Desktop/DesktopWorkspaceView.cs#Render`）：`_root` 内一层 `frame = Grid{ RowDefinitions = "*,Auto" }`；`_compact = Bounds.Width < 820`。
+**工作台外壳**（`Desktop/DesktopWorkspaceView.cs#Render`）：`_root` 内一层 `frame = Grid`；`_compact = Bounds.Width < 820`。
 - 宽屏：左栏 184px（`BuildRail`：标题/副标题 + 记录/计划/场记/⚙工程与偏好 + 工程名/进度），右列 `_host.Content` 换页。
-- 窄屏（手机/小窗）：左栏列宽归零并隐藏，第 2 行插入 `BuildBottomNav()`（四等分 97px、高 56、选中 `#31574C`、`AutomationId = navb-record/navb-plan/navb-log/navb-settings`）。**注意**：主题给 `Button` 的默认 `HorizontalAlignment` 是 `Left`，导航按钮必须显式 `Stretch`，否则宽度只剩文字宽（实测 24px，触屏点不中）。
+- 窄屏（手机/小窗）：左栏列宽归零并隐藏，**没有底部 Tab**（用户明确不要多选 tab，2026-10-26 移除 `BuildBottomNav`）。三页改成竖向整页翻页：`PageOrder = { "plan", "record", "log" }`，下滑＝上一页、上滑＝下一页，右侧 `BuildPagerDots()` 三颗指示点（`AutomationId = pager-dots`，`IsHitTestVisible = false`）。
+  - 手势在 `AttachPager()`：三个 `PointerPressed/Moved/Released` 挂在**视图自身**（`RoutingStrategies.Tunnel` + `handledEventsToo: true`），因为页内 `ScrollViewer` 会先吃掉指针；落点在 `_joyArea` 内或 `_overlayLayer` 有子元素（弹窗开着）时直接跳过。
+  - 边界优先：`AtScrollEdge(dy)` 只在当前页滚动器已在顶/底（或内容不足一屏）时才接管，否则让 `ScrollViewer` 正常滚动（iOS 分页手感）。
+  - 跟手 0.5×（`_pagerShift = dy * 0.5`），松手按手指行程判阈值 `PagerCommit = 70`（`PageForSwipe(shift * 2)`），过阈值 `Navigate(target)` 后新页从 `-shift` 处滑入，未过阈值 `AnimateHost(shift)` 回弹（7 帧 16ms 三次缓出）。
+  - 手机端**设置入口只剩记录页页头的 ⚙**（`AutomationId = open-settings`），计划/时间轴页用页头「返回拍摄 ×」（`nav-back`）回记录页。
+- 测试：`VoiSlate.csproj` 加 `<InternalsVisibleTo Include="VoiSlate.Tests" />`，`WorkspacePhoneLayoutTests` 用 `Avalonia.Headless` 的 `MouseDown/MouseMove/MouseUp` 做真拖拽，断言 `CurrentPage` 与「不残留 `navb-*` 按钮」。
 - 页面切换 = `Navigate(key)`（把 key 归一为小写后置 `_page` 再 `Render()`）；键盘 `HandleShortcut`（Ctrl+1/2/3、Ctrl+Shift+Z、Ctrl+Enter、Esc）由薄壳 Window 以 Tunnel 方式转交，Android 无键盘路径。
 - 窄屏留白统一走 `PagePad(horizontal, vertical)`（compact 时夹到 14/12）。
 
 **P7 遗留缺口收口（2026-10-26，`docs/p7-vm-coverage.md` §8）**——删 P7 ViewModel 前补齐的现场能力，改这几处前先看该文档的回归用例表：
-- 音量键：`Services/IHardwareKeyService.cs` 的 `HardwareKeys.Current` 平台注册表 → `src/VoiSlate.Android/AndroidHardwareKeyService.cs` + `MainActivity.OnKeyDown`（上键记条、下键撤回，仅记录页且 `_busy=false`）。视图侧订阅在 `DesktopWorkspaceView` ctor，`DetachedFromVisualTree` 解绑。
+- 音量键：`Services/HardwareKeys.cs` 的**静态事件** `HardwareKeys.Pressed`（`Raise/HasHandlers`）← `src/VoiSlate.Android/AndroidHardwareKeyService.cs` 映射 `Keycode` 后 `Raise`，由 `MainActivity.DispatchKeyEvent` 消费（**不是 `OnKeyDown`**：Avalonia 的 Android 视图会先吃按键）；上键记条、下键撤回，仅记录页且 `_busy=false`。视图侧订阅在 `DesktopWorkspaceView` ctor，`DetachedFromVisualTree` 解绑。
 - 旧会话迁移：`Desktop/DesktopWorkspaceLegacy.cs` 的 `AdoptLegacySessionAsync()` 把老 `settings` 集合的 `project` 键 + `SessionKeys` 13 键一次性并入 `WorkspaceSession`；命名非法时保留默认而不阻塞启动。
 - 按日导出：`DesktopWorkspaceBackup.ExportDayJson(date)` / `DayCount(date)`；时间轴表头按钮在选定日期时变「导出当日」。
 - 计划守卫与编号：`DesktopWorkspaceEditing.DeletePlanItemAsync` 保留「至少 1 场 1 镜」且不再 `_undo.Clear()`；`UndoAsync` 会把已删除的场地重定位到存活条目；`NextPlanKey(scene, isScene)` 给新建预填下一个编号；`UsedFileNumbers(prefix, linker)` 在场记编辑框里提示已占用序号。
@@ -279,13 +284,13 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 
 ## 10. 测试矩阵（tests/VoiSlate.Tests，xUnit，无 Moq 全手写 Fake/Stub/Spy）
 
-约 200 `[Fact]` + 11 `[Theory]`（≈51 行 InlineData），合计 **274 用例全绿 / 6 跳过（共 280）**（2026-10-26：删 P7 的 56 条 VM 用例、legacy TakeFlowService 的 15 条用例，新增迁移/音量键/触觉/窄屏用例）。
+约 200 `[Fact]` + 11 `[Theory]`（≈51 行 InlineData），合计 **276 用例全绿 / 6 跳过（共 282）**（2026-10-26：删 P7 的 56 条 VM 用例、legacy TakeFlowService 的 15 条用例，新增迁移/音量键/触觉/窄屏/翻页用例）。
 
 | 组 | 文件（节选） | 覆盖 |
 |---|---|---|
 | Models | ModelTests / DataListVerbatim / FileNumberingServiceVerbatim / RecorderType / SlateLogItemSentinel | DataList 查重、文件号三前缀模式、枚举显式值与 JSON 短枚举名、Fake/Wild 哨兵逐字往返 |
 | Services | TakeFlowServiceTests + 13 个模块测试 | B1-B11 业务规则复刻锁定（首按不写/收工守卫/假拍延迟一拍）、备份/导出/CSV 解析/跨日回滚/MicObjects |
-| Desktop 工作台 | Desktop/Workspace{Service,Editing,Backup,LegacyAndSafety,PhoneLayout,Ui}Tests | 记条/撤回/假条/命名、计划读写与守卫、旧会话迁移、按日导出、390×840 布局、音量键通道 |
+| Desktop 工作台 | Desktop/Workspace{Service,Editing,Backup,LegacyAndSafety,PhoneLayout,Haptics,Ui}Tests | 记条/撤回/假条/命名、计划读写与守卫、旧会话迁移、按日导出、390×840 布局、翻页手势、音量键通道、震动幅度 |
 | Controls | ControlSurface / WheelSelectionLogic / SlideConfirmLogic / DialStatusPalette / FileNumberFormat / PaletteResourceKeys | 滚轮/滑条纯逻辑状态机、控件契约默认值、主题资源键存在性与前缀校验 |
 | RepositoryTests | LiteDB 仓储 + Seed + MockAsr | 保序往返、类型化设置、播种仅一次 |
 

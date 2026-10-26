@@ -36,6 +36,11 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private readonly DispatcherTimer _hold = new() { Interval = TimeSpan.FromMilliseconds(650) };
     private bool _holding, _held;
     private Action? _finishVoice;
+    private ScrollViewer? _recordScroll;
+    // 窄屏整页翻页（用户不要底部多选 Tab）：三页竖向排列，下滑去上一页、上滑去下一页。
+    private bool _pagerAttached, _pagerTracking;
+    private double _pagerStartY, _pagerShift;
+    private const double PagerCommit = 70;
     private readonly bool _voiceCaptureAvailable;
 
     public DesktopWorkspaceView(DesktopWorkspaceService service, Speech.BailianSettingsStore speechSettings,
@@ -51,6 +56,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
         DetachedFromVisualTree += (_, _) => { _service.Changed -= OnChanged; _toastTimer?.Stop(); _hold.Stop(); _finishVoice?.Invoke(); HardwareKeys.Pressed -= OnHardwareKey; };
         // 音量键：Android 由 MainActivity 注入实现（原版就是这样记条/撤回，单手戴手套也能用）；桌面为 null，走键盘快捷键。
         HardwareKeys.Pressed += OnHardwareKey;
+        AttachPager();
         _hold.Tick += (_, _) => { _hold.Stop(); if (_holding) { _held = true; SaveTake(); } };
         SizeChanged += (_, _) => { var compact = Bounds.Width < 820; if (compact != _compact) { _compact = compact; Render(); } };
         AddHandler(InputElement.KeyDownEvent, (_, e) => HandleShortcut(e), Avalonia.Interactivity.RoutingStrategies.Tunnel);
@@ -156,45 +162,132 @@ public sealed partial class DesktopWorkspaceView : UserControl
         _rail = Box(BuildRail(), "#173F49", 18, radius: 0); _rail.IsVisible = !_compact;
         _host = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
         Grid.SetColumn(_host, 1); _shell.Children.Add(_rail); _shell.Children.Add(_host);
-        // 窄屏：左栏整列归零会让导航彻底消失（P8 原实现就是这样），这里补一条底部 Tab 栏，
-        // 并且把「工程与偏好」也放进去——否则计划/时间轴页在手机上再也进不了设置。
-        var frame = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
+        // 窄屏没有底部 Tab（用户明确不接受多选 tab）：三页改成一条竖向翻页——下滑回拍摄计划、
+        // 上滑去场记时间轴，见 AttachPager/BuildPagerDots。设置入口是记录页页头那颗 ⚙。
+        var frame = new Grid();
         frame.Children.Add(_shell);
-        if (_compact) { var nav = BuildBottomNav(); Grid.SetRow(nav, 1); frame.Children.Add(nav); }
+        if (_compact) frame.Children.Add(BuildPagerDots());
         _root.Children.Add(frame);
         _toast = Box(T(""), "#2C4249", 14); _toast.MaxWidth = 560; _toast.IsVisible = false; _toast.Margin = new Thickness(20, 0, 20, 80);
         _toast.HorizontalAlignment = HorizontalAlignment.Center; _toast.VerticalAlignment = VerticalAlignment.Bottom; _root.Children.Add(_toast);
         if (_overlayLayer.Parent is Panel oldParent) oldParent.Children.Remove(_overlayLayer); // 换父级前先摘，否则 "already has a visual parent"
         _root.Children.Add(_overlayLayer); // 弹层宿主：跨重渲染存活（对象本身是字段）
         Content = _root;
+        _recordScroll = _planScroll = _logScroll = null; // 换页后旧滚动器已经分离，别留着判边界
         _host.Content = _page switch { "plan" => BuildPlan(), "log" => BuildTimeline(), _ => BuildRecord() };
     }
     /// <summary>页面留白：窄屏减半，否则 390 宽的手机上左右 48px 会被吃掉 1/5。</summary>
     private Thickness PagePad(double horizontal, double vertical) =>
         new(_compact ? Math.Min(horizontal, 14) : horizontal, _compact ? Math.Min(vertical, 12) : vertical);
 
-    /// <summary>窄屏底部 Tab：与左栏同权（三页 + 工程与偏好），触屏目标高 56。</summary>
-    private Control BuildBottomNav()
+    /// <summary>三页竖向顺序：拍摄计划在上、记录在中、场记时间轴在下（下滑=上一页，上滑=下一页）。</summary>
+    private static readonly string[] PageOrder = { "plan", "record", "log" };
+
+    /// <summary>给测试与诊断看当前页（"plan"/"record"/"log"）。</summary>
+    internal string CurrentPage => _page;
+
+    private int PageIndex
     {
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Background = Brush("#173F49") };
-        var entries = new (string Key, string Icon, string Text)[] { ("record", "◉", "记录"), ("plan", "▤", "计划"), ("log", "◷", "时间轴") };
-        for (var i = 0; i < entries.Length; i++)
+        get { var i = Array.IndexOf(PageOrder, _page); return i < 0 ? 1 : i; }
+    }
+
+    private ScrollViewer? ActiveScroll => _page == "plan" ? _planScroll : _page == "log" ? _logScroll : _recordScroll;
+
+    /// <summary>内层还能滚就先滚内容，滚到顶/底再滑才翻页（iOS 分页手感）。</summary>
+    private bool AtScrollEdge(double dy)
+    {
+        var scroll = ActiveScroll;
+        if (scroll is null) return true; // 内容不足一屏：本来就在两端
+        return dy > 0
+            ? scroll.Offset.Y <= 0.5
+            : scroll.Offset.Y >= Math.Max(0, scroll.Extent.Height - scroll.Viewport.Height) - 0.5;
+    }
+
+    /// <summary>相对当前页上下滑一格的目标页；没有上一页/下一页时返回 null（交给回弹）。</summary>
+    internal string? PageForSwipe(double dy)
+    {
+        if (dy > PagerCommit) return PageIndex > 0 ? PageOrder[PageIndex - 1] : null;
+        if (dy < -PagerCommit) return PageIndex < PageOrder.Length - 1 ? PageOrder[PageIndex + 1] : null;
+        return null;
+    }
+
+    /// <summary>翻页手势挂在视图自身（Tunnel + handledEventsToo）：页内 ScrollViewer 和摇杆都会先吃掉指针。</summary>
+    private void AttachPager()
+    {
+        if (_pagerAttached) return; _pagerAttached = true;
+        AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
-            var (key, icon, text) = entries[i];
-            var on = _page == key;
-            var b = B("", () => Navigate(key), "quiet", "navb-" + key);
-            b.Content = Stack(2, T(icon, 17, on ? "#FFFFFF" : "#9BB6B6"), T(text, 11, on ? "#FFFFFF" : "#9BB6B6"));
-            b.Height = 56; b.Padding = default;
-            b.HorizontalAlignment = HorizontalAlignment.Stretch; b.VerticalAlignment = VerticalAlignment.Stretch; // 主题里 Button 默认 Left，不显式撑开会只剩文字宽（命中区 24px）
-            b.Background = on ? Brush("#31574C") : Brush("Transparent");
-            Grid.SetColumn(b, i); grid.Children.Add(b);
+            if (!_compact || _overlayLayer.Children.Count > 0) return;   // 桌面有左栏；弹窗开着时不翻页
+            if (InsideJoy(e.GetPosition(this))) return;                    // 摇杆自己拖
+            _pagerStartY = e.GetPosition(this).Y; _pagerShift = 0; _pagerTracking = true;
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.PointerMovedEvent, (_, e) =>
+        {
+            if (!_pagerTracking) return;
+            var dy = e.GetPosition(this).Y - _pagerStartY;
+            if (Math.Abs(dy) < 8) return;
+            if (!AtScrollEdge(dy)) { if (Math.Abs(_pagerShift) > 0.5) { var back = _pagerShift; _pagerShift = 0; AnimateHost(back); } _pagerTracking = false; return; }
+            _pagerShift = dy * 0.5; // 跟手打折，拖到一半就有「有种弹力」的观感
+            if (_host is not null) _host.RenderTransform = new TranslateTransform(0, _pagerShift);
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.PointerReleasedEvent, (_, _) =>
+        {
+            if (!_pagerTracking) return;
+            _pagerTracking = false;
+            var shift = _pagerShift; _pagerShift = 0;
+            if (Math.Abs(shift) < 0.5) return;
+            var target = PageForSwipe(shift * 2); // 跟手是 0.5 倍，还原成手指行程再判阈值
+            if (target is null) { AnimateHost(shift); return; }
+            Navigate(target);
+            AnimateHost(-shift); // 新页从滑走的方向接上来，衔接不跳
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+    }
+
+    private bool InsideJoy(Point point)
+    {
+        if (_joyArea is not { IsEffectivelyVisible: true } joy) return false;
+        if (joy.TranslatePoint(new Point(0, 0), this) is not { } origin) return false;
+        return point.X >= origin.X - 8 && point.X <= origin.X + joy.Bounds.Width + 8
+            && point.Y >= origin.Y - 8 && point.Y <= origin.Y + joy.Bounds.Height + 8;
+    }
+
+    /// <summary>整页纵向滑入/回弹：7 帧三次缓出。不用 Transitions 是为了拖动期间零延迟。</summary>
+    private void AnimateHost(double fromY)
+    {
+        if (_host is null) return;
+        if (Math.Abs(fromY) < 1) { _host.RenderTransform = null; return; }
+        var step = 0;
+        var ticker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        ticker.Tick += (_, _) =>
+        {
+            step++;
+            var eased = 1 - Math.Pow(1 - Math.Min(1, step / 7d), 3);
+            _host.RenderTransform = new TranslateTransform(0, fromY * (1 - eased));
+            if (step < 7) return;
+            ticker.Stop(); _host.RenderTransform = null;
+        };
+        ticker.Start();
+    }
+
+    /// <summary>右侧三颗小圆点：只说清「上下还有页」，不吃点击（翻页靠滑）。</summary>
+    private Control BuildPagerDots()
+    {
+        var dots = new StackPanel
+        {
+            Spacing = 7, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 5, 0), IsHitTestVisible = false
+        };
+        AutomationProperties.SetAutomationId(dots, "pager-dots");
+        for (var i = 0; i < PageOrder.Length; i++)
+        {
+            var on = i == PageIndex;
+            dots.Children.Add(new Border
+            {
+                Width = on ? 6 : 4, Height = on ? 6 : 4, CornerRadius = new CornerRadius(3),
+                Background = Brush(on ? "#31574C" : "#B9C7C2"), HorizontalAlignment = HorizontalAlignment.Center
+            });
         }
-        var prefs = B("", ShowSettings, "quiet", "navb-settings");
-        prefs.Content = Stack(2, T("⚙", 17, "#9BB6B6"), T("偏好", 11, "#9BB6B6"));
-        prefs.Height = 56; prefs.Padding = default; prefs.Background = Brush("Transparent");
-        prefs.HorizontalAlignment = HorizontalAlignment.Stretch; prefs.VerticalAlignment = VerticalAlignment.Stretch;
-        Grid.SetColumn(prefs, 3); grid.Children.Add(prefs);
-        return grid;
+        return dots;
     }
 
     /// <summary>UserControl 上没有 StorageProvider；桌面拿 Window 的，无窗口宿主则明确报错（Android 无文件选择器）。</summary>
@@ -235,7 +328,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private Control BuildRecord()
     {
         var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto") };
-        grid.Children.Add(PageHeader("VOISLATE / ON SET", "当前记录", B("⚙", ShowSettings, "quiet")));
+        grid.Children.Add(PageHeader("VOISLATE / ON SET", "当前记录", B("⚙", ShowSettings, "quiet", "open-settings")));
         var project = B($"▧  {_service.State.Project}   ·   完成 {DoneCount} / {ShotCount} 镜   ↗", () => Navigate("plan"), "quiet");
         project.HorizontalAlignment = HorizontalAlignment.Stretch; Grid.SetRow(project, 1); grid.Children.Add(project);
         var d = _service.Draft; var panel = Stack(14); panel.MaxWidth = 470; panel.Margin = PagePad(20, 20);
@@ -300,6 +393,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
         panel.Children.Add(B("⌄  场记时间轴", () => { _scopeScene = _scopeShot = null; Navigate("log"); }, "quiet", "open-timeline"));
         if (!_service.State.Linked) panel.Children.Add(T("补录模式 · 次号冻结，文件号继续前进", 11, "#9875A3"));
         var scroll = new ScrollViewer { Content = panel, HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center };
+        _recordScroll = scroll;
         Grid.SetRow(scroll, 2); grid.Children.Add(scroll);
         var caption = T("本机自动保存  ·  百炼实时语音标注", 10, "#96A397"); caption.Margin = new Thickness(20, 10); caption.HorizontalAlignment = HorizontalAlignment.Center;
         Grid.SetRow(caption, 3); grid.Children.Add(caption); return grid;
@@ -312,7 +406,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private Control BuildPlan()
     {
         var page = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,*,Auto"), Background = Brush("#F3F6F3") };
-        page.Children.Add(PageHeader("01 / SHOT PLAN", "拍摄计划", B("导入 CSV", ImportPlan, "quiet", "import-plan"), B("返回拍摄 ×", () => Navigate("record"), "quiet")));
+        page.Children.Add(PageHeader("01 / SHOT PLAN", "拍摄计划", B("导入 CSV", ImportPlan, "quiet", "import-plan"), B("返回拍摄 ×", () => Navigate("record"), "quiet", "nav-back")));
         _planOverview = Stack(8); _planOverview.Margin = new Thickness(24, 15, 24, 0); Grid.SetRow(_planOverview, 1); page.Children.Add(_planOverview);
         var search = new TextBox { Text = _planQuery, PlaceholderText = "搜索场地、场镜、人物或内容…", Margin = new Thickness(24, 12, 24, 0) };
         AutomationProperties.SetName(search,"搜索拍摄计划"); search.TextChanged += (_, _) => { _planQuery = search.Text ?? ""; RenderPlanContents(); };
@@ -400,7 +494,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private Control BuildTimeline()
     {
         var page = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,*,Auto"), Background = Brush("#F4F5F8") };
-        page.Children.Add(PageHeader("02 / TAKE TIMELINE", "场记时间轴", _exportButton = B(_logDate is null ? "导出 JSON" : "导出当日", ExportTimeline, "quiet", "export"), B("返回拍摄 ×", () => Navigate("record"), "quiet")));
+        page.Children.Add(PageHeader("02 / TAKE TIMELINE", "场记时间轴", _exportButton = B(_logDate is null ? "导出 JSON" : "导出当日", ExportTimeline, "quiet", "export"), B("返回拍摄 ×", () => Navigate("record"), "quiet", "nav-back")));
         _logSummary = Stack(8); _logSummary.Margin = new Thickness(24, 15, 24, 0); Grid.SetRow(_logSummary,1); page.Children.Add(_logSummary);
         _dates = Row(7); var dateScroll = new ScrollViewer { Content = _dates, Margin = new Thickness(24, 12, 24, 0), HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
         Grid.SetRow(dateScroll,2); page.Children.Add(dateScroll);

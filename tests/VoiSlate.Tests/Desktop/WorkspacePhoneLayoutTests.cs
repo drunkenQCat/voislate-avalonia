@@ -2,13 +2,15 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Xunit;
 
 namespace VoiSlate.Tests.Desktop;
 
-// 390×840（手机宽度）下的布局体检：没有真机也要能自动判定「底部导航在、内容没被切掉」。
+// 390×840（手机宽度）下的布局体检：没有真机也要能自动判定「没有底部 Tab、翻页手势有效、内容没被切掉」。
 public sealed partial class DesktopWorkspaceTests
 {
     private static Rect InWindow(Visual element, Visual window)
@@ -32,8 +34,75 @@ public sealed partial class DesktopWorkspaceTests
         return string.Join(" < ", parts);
     }
 
+    private static void Drag(Window window, double fromY, double toY, double x = 195)
+    {
+        window.MouseDown(new Point(x, fromY), MouseButton.Left);
+        window.MouseMove(new Point(x, (fromY + toY) / 2));
+        window.MouseMove(new Point(x, toY));
+        window.MouseUp(new Point(x, toY), MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
     [Fact]
-    public Task Ui_phone_width_keeps_bottom_nav_and_controls_inside_viewport() => RunUi(async () =>
+    public Task Ui_phone_page_for_swipe_follows_the_vertical_order() => RunUi(async () =>
+    {
+        using var f = await Create(); var window = await WindowFor(f);
+        try
+        {
+            window.Width = 390; window.Height = 840; Dispatcher.UIThread.RunJobs();
+            var view = window.View;
+            Assert.Equal("record", view.CurrentPage);
+            Assert.Equal("plan", view.PageForSwipe(120));    // 下滑 → 上一页（拍摄计划）
+            Assert.Equal("log", view.PageForSwipe(-120));    // 上滑 → 下一页（场记时间轴）
+            Assert.Null(view.PageForSwipe(60));              // 没到阈值：回弹，不翻页
+            Invoke(Control<Button>(window, "open-plan"));
+            Assert.Equal("plan", view.CurrentPage);
+            Assert.Null(view.PageForSwipe(120));             // 已经在最上面，没有上一页
+            Invoke(Control<Button>(window, "nav-back"));
+            Invoke(Control<Button>(window, "open-timeline"));
+            Assert.Equal("log", view.CurrentPage);
+            Assert.Null(view.PageForSwipe(-120));            // 已经在最下面，没有下一页
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public Task Ui_phone_drag_switches_page_without_a_bottom_tab() => RunUi(async () =>
+    {
+        using var f = await Create(); var window = await WindowFor(f);
+        try
+        {
+            window.Width = 390; window.Height = 840; Dispatcher.UIThread.RunJobs();
+            CaptureFrame(window, "phone-record");
+            var view = window.View;
+
+            // 1) 底部多选 Tab 必须不存在（用户明确不要）
+            var navButtons = window.GetVisualDescendants().OfType<Button>()
+                .Select(AutomationProperties.GetAutomationId).Where(id => id?.StartsWith("navb-") == true).ToList();
+            Assert.True(navButtons.Count == 0, "还留着底部 Tab：" + string.Join(",", navButtons));
+
+            // 2) 右侧要有三颗指示点，且不吃点击（否则会挡住翻页手势）
+            var dots = window.GetVisualDescendants().OfType<StackPanel>()
+                .Single(p => AutomationProperties.GetAutomationId(p) == "pager-dots");
+            Assert.Equal(3, dots.Children.Count);
+            Assert.False(dots.IsHitTestVisible);
+
+            // 3) 真手势：从上往下拖 = 回拍摄计划（记录页在顶部，边界允许翻页）
+            Drag(window, 170, 330);
+            Assert.True(view.CurrentPage == "plan", $"下滑后应该在拍摄计划，实际 {view.CurrentPage}");
+            CaptureFrame(window, "phone-plan-by-swipe");
+
+            // 4) 计划页已在最上一页：继续下滑不该翻页（边界回弹），回记录页走页头 ✕
+            Drag(window, 170, 330);
+            Assert.True(view.CurrentPage == "plan", $"最上一页再下滑不该翻页，实际 {view.CurrentPage}");
+            Invoke(Control<Button>(window, "nav-back"));
+            Assert.Equal("record", view.CurrentPage);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public Task Ui_phone_width_keeps_controls_inside_viewport() => RunUi(async () =>
     {
         using var f = await Create(); var window = await WindowFor(f);
         try
@@ -42,20 +111,10 @@ public sealed partial class DesktopWorkspaceTests
             window.Width = 390; window.Height = 840; Dispatcher.UIThread.RunJobs();
             CaptureFrame(window, "phone-record");
 
-            // 1) 窄屏必须有底部 Tab（P8 原生实现是「左栏整列归零」= 完全没导航）
-            foreach (var key in new[] { "navb-record", "navb-plan", "navb-log", "navb-settings" })
+            // 三页都不许有内容跑到 390 之外（滚动条自身零件不计：贴着视口右缘是正常的）
+            foreach (var (id, name) in new[] { ("open-plan", "phone-plan"), ("open-timeline", "phone-timeline") })
             {
-                var tab = Control<Button>(window, key);
-                Assert.True(tab.IsEffectivelyVisible, $"{key} 应可见");
-                Assert.True(tab.Bounds.Height >= 44, $"{key} 触屏目标过小：{tab.Bounds.Height}");
-                // 四等分撑满 390：主题里 Button 默认 HorizontalAlignment=Left，漏掉 Stretch 会只剩文字宽（实测 24px，触屏几乎点不中）
-                Assert.True(tab.Bounds.Width >= 87, $"{key} 没有横向撑满四等分：{tab.Bounds.Width}");
-            }
-
-            // 2) 三页都不许有内容跑到 390 之外（滚动条自身零件不计：贴着视口右缘是正常的）
-            foreach (var (tabId, name) in new[] { ("navb-plan", "phone-plan"), ("navb-log", "phone-timeline"), ("navb-record", "phone-back") })
-            {
-                Invoke(Control<Button>(window, tabId)); Dispatcher.UIThread.RunJobs(); CaptureFrame(window, name);
+                Invoke(Control<Button>(window, id)); Dispatcher.UIThread.RunJobs(); CaptureFrame(window, name);
                 var offenders = new List<string>();
                 foreach (var c in window.GetVisualDescendants().OfType<Control>())
                 {
@@ -65,10 +124,11 @@ public sealed partial class DesktopWorkspaceTests
                     if (rect.Right > 391 || rect.Left < -1) offenders.Add($"{name}: {Chain(c)} rect={rect}");
                 }
                 Assert.True(offenders.Count == 0, $"client={window.ClientSize}\n" + string.Join("\n", offenders.Take(10)));
+                Invoke(Control<Button>(window, "nav-back")); // 页头的 ✕ 回记录页，下一轮从记录页出发
             }
 
-            // 3) 窄屏也要能直接进设置（左栏隐藏后原本只有记录页头有齿轮）
-            Invoke(Control<Button>(window, "navb-settings"));
+            // 3) 窄屏也要能直接进设置（左栏隐藏后只剩记录页头那颗齿轮）
+            Invoke(Control<Button>(window, "open-settings"));
             var dialog = Assert.Single(window.OwnedWindows);
             Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text?.Contains("工程名称") == true);
 

@@ -141,3 +141,15 @@
 - 视图侧：`DesktopWorkspaceView.SaveTake(...)` / `UndoTake()` 在**服务调用成功之后**触发，覆盖保存按钮、假条、结束本镜、音量上键、口袋锁长按、`Ctrl+Enter`、撤回按钮、音量下键、`Ctrl+Shift+Z` 九条入口。
 - 回归用例：`tests/VoiSlate.Tests/Desktop/WorkspaceHapticsTests.cs`（幅度/时长表、无实现时静默、UI 层「保存→短震 / 撤回→长震」）。
 - 验收：`dotnet build VoiSlate.slnx` 0 error；`dotnet test` **274 passed / 6 skipped / 280**；`dotnet build src/VoiSlate.Android/VoiSlate.Android.csproj` 0 error。
+
+## 12. 手机端翻页（2026-10-26，替代底部多选 Tab）
+
+用户不接受手机端底部 Tab（m02960）：三页应像一条竖向瀑布——下滑是拍摄计划、上滑是场记时间轴。
+
+- 移除 `DesktopWorkspaceView.BuildBottomNav()` 及其在 `Render()` 的插入；`_compact` 下 `frame` 只剩一层 `_shell`，右侧叠三颗 `pager-dots` 指示点（`IsHitTestVisible = false`）。
+- 新增 `AttachPager()`：`PageOrder = { "plan", "record", "log" }`，`PointerPressed/Moved/Released` 挂在视图自身，`RoutingStrategies.Tunnel` + `handledEventsToo: true`（页内 `ScrollViewer` 与语音摇杆都会先吃指针）。落点在 `_joyArea` 内、或 `_overlayLayer` 有子元素时跳过。
+- 边界优先：`AtScrollEdge(dy)` 判断当前页滚动器是否已在顶/底，内容不足一屏视为两端都到；只在到边时才接管，否则交给 `ScrollViewer`（iOS 分页手感）。
+- 跟手 0.5×、松手阈值 `PagerCommit = 70`（`PageForSwipe(shift * 2)`）；过阈值 `Navigate(target)` 后新页从 `-shift` 滑入，未过阈值 `AnimateHost(shift)` 回弹（7 帧 16ms 三次缓出）。
+- 手机端设置入口：记录页页头 ⚙（`open-settings`）；计划/时间轴页用页头「返回拍摄 ×」（`nav-back`）。
+- 回归用例（`tests/VoiSlate.Tests/Desktop/WorkspacePhoneLayoutTests.cs`，`Avalonia.Headless` 真拖拽）：`Ui_phone_page_for_swipe_follows_the_vertical_order`（页序/阈值/两端无页）、`Ui_phone_drag_switches_page_without_a_bottom_tab`（无 `navb-*`、三点指示、拖拽翻页与边界回弹）、`Ui_phone_width_keeps_controls_inside_viewport`（三页 + 弹窗溢出扫描、⚙ 可达）。
+- 参考：Flutter 原版并不是滑动分页（`lib/pages/main_page.dart:126` 是 `TabBarView(physics: NeverScrollableScrollPhysics())` + `BottomNavigationBar`），所以这套翻页是**新偏好**而非还原。

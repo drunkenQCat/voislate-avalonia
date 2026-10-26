@@ -9,6 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- 界面用例需要看 DesktopWorkspaceView 的内部诊断面（CurrentPage/PageForSwipe 等） -->
+    <InternalsVisibleTo Include="VoiSlate.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Avalonia 12.1.1（Avalonia.Diagnostics 11.x 版本滞后，暂不引入，需调试工具时再评估） -->
     <PackageReference Include="Avalonia" Version="12.1.1" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
