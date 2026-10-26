@@ -25,14 +25,18 @@ public sealed partial class DesktopWorkspaceService
         Days = Logs.GroupBy(l => l.Date).Select(g => new WorkspaceBackupDay { Date = g.Key, Takes = g.Select(l => Clone(l.Item)).ToList() }).ToList()
     };
     public string ExportJson() => JsonSerializer.Serialize(Snapshot(), Json);
-    public string ExportFlutterJson() => JsonSerializer.Serialize(Logs.Select(row => new
+    public string ExportFlutterJson() => JsonSerializer.Serialize(FlutterRows(Logs), ImportJson);
+    /// <summary>只导出某一天（场记时间轴切到单日时用；原版按日导出，现役此前永远全量）。</summary>
+    public string ExportDayJson(string date) => JsonSerializer.Serialize(FlutterRows(Logs.Where(row => row.Date == date)), ImportJson);
+    public int DayCount(string date) => Logs.Count(row => row.Date == date);
+    private static IEnumerable<object> FlutterRows(IEnumerable<WorkspaceLog> rows) => rows.Select(row => (object)new
     {
         row.Item.Scn, row.Item.Sht, Tk = row.Item.IsRetake ? 0 : row.Item.Tk,
         row.Item.FilenamePrefix, row.Item.FilenameLinker, row.Item.FilenameNum,
         row.Item.TkNote,
         ShtNote = row.Item.ShtNote + string.Concat((row.Item.Tracks ?? []).Select(t => "<" + t + "/>")),
         row.Item.ScnNote, row.Item.OkTk, row.Item.OkSht
-    }), ImportJson);
+    });
     private static bool ValidDate(string? date) => date is not null && Regex.IsMatch(date, @"^\d{6}$") && DateTime.TryParseExact(date, "yyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
     private static string? InferDate(SlateLogItem item)
     {

@@ -75,12 +75,15 @@ public sealed partial class DesktopWorkspaceService
         var scene = Scenes.FirstOrDefault(s => s.Info.Name == sceneName) ?? throw new InvalidOperationException("场次已不存在");
         if (shotName is null)
         {
+            // 原版守卫：计划不能删空，否则当场无法记条（SaveTakeAsync 会抛「请先添加并选择拍摄计划」）。
+            if (Scenes.Count <= 1) throw new InvalidOperationException("拍摄计划至少保留一个场次，请先添加新场次");
             var index = Scenes.IndexOf(scene); _deletedPlan = (scene, null, index); Scenes.RemoveAt(index);
         }
         else
         {
             var index = scene.Items.ToList().FindIndex(s => s.Name == shotName);
             if (index < 0) throw new InvalidOperationException("镜头已不存在");
+            if (scene.Count <= 1) throw new InvalidOperationException("每个场次至少保留一个镜头，请先添加新镜头");
             _deletedPlan = (scene, scene[index], index); scene.RemoveAt(index);
         }
         if (Scene is null || Shot is null)
@@ -88,7 +91,8 @@ public sealed partial class DesktopWorkspaceService
             State.Scene = Scenes.FirstOrDefault(s => s.Count > 0)?.Info.Name ?? "";
             State.Shot = Scene?.Items.FirstOrDefault()?.Name ?? "";
         }
-        await schedules.SaveAllAsync(Scenes); _undo.Clear();
+        // 不在这里 _undo.Clear()：删计划与场记撤回栈无关，原版抹掉 100 步纯属副作用。
+        await schedules.SaveAllAsync(Scenes);
     });
     public Task RestorePlanItemAsync() => Change(async () =>
     {

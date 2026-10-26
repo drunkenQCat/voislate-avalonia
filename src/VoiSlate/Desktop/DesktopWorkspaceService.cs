@@ -44,10 +44,14 @@ public sealed partial class DesktopWorkspaceService(IScheduleStore schedules, IL
         Scenes.AddRange(await schedules.LoadAllAsync());
         var saved = await settings.GetStringAsync(SessionKey);
         if (!string.IsNullOrEmpty(saved)) State = JsonSerializer.Deserialize<WorkspaceSession>(saved, Json) ?? throw new InvalidDataException("无法读取桌面会话存档");
-        else if (await settings.GetStringAsync(SessionKeys.Date, "") == Today)
+        else
         {
-            State.Date = Today;
-            State.FileNumber = Math.Max(1, await settings.GetIntAsync(SessionKeys.RecordCount, 1));
+            await AdoptLegacySessionAsync();
+            if (await settings.GetStringAsync(SessionKeys.Date, "") == Today)
+            {
+                State.Date = Today;
+                State.FileNumber = Math.Max(1, await settings.GetIntAsync(SessionKeys.RecordCount, 1));
+            }
         }
         await ReloadLogs();
         await MigratePlanAndLogs();
@@ -60,6 +64,7 @@ public sealed partial class DesktopWorkspaceService(IScheduleStore schedules, IL
             State.Shot = Scene?.Items.FirstOrDefault()?.Name ?? "";
         }
         State.FileNumber = Math.Max(State.FileNumber, NextAvailableNumber());
+        AttachLegacyDraft();
         await Persist();
     }
     private int NextAvailableNumber()
@@ -183,6 +188,12 @@ public sealed partial class DesktopWorkspaceService(IScheduleStore schedules, IL
         var preferences = (State.Project, State.PocketLock, State.LeftHanded, State.AutoBackup, State.BackupDirectory);
         State = Clone(snapshot.State);
         (State.Project, State.PocketLock, State.LeftHanded, State.AutoBackup, State.BackupDirectory) = preferences;
+        // 撤回后的快照可能指向已被删除/改名的计划条目：不留悬空场镜，否则下一次记条会抛「请先添加并选择拍摄计划」。
+        if (Scene is null || (Shot is null && Scene.Count > 0))
+        {
+            State.Scene = Scenes.FirstOrDefault(s => s.Count > 0)?.Info.Name ?? "";
+            State.Shot = Scene?.Items.FirstOrDefault()?.Name ?? "";
+        }
         _undo.RemoveAt(_undo.Count - 1);
     });
     public Task SelectShotAsync(string scene, string shot) => Change(() =>

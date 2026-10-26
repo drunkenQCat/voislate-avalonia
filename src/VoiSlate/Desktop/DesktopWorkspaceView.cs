@@ -10,6 +10,7 @@ using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Threading;
 using Avalonia.Platform.Storage;
 using VoiSlate.Models;
+using VoiSlate.Services;
 
 namespace VoiSlate.Desktop;
 
@@ -35,6 +36,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private bool _holding, _held;
     private Action? _finishVoice;
     private readonly bool _voiceCaptureAvailable;
+    private readonly IHardwareKeyService? _hardwareKeys;
 
     public DesktopWorkspaceView(DesktopWorkspaceService service, Speech.BailianSettingsStore speechSettings,
         Speech.BailianRealtimeClient? speechClient = null, Func<int, Speech.IPcmCapture>? captureFactory = null)
@@ -46,7 +48,10 @@ public sealed partial class DesktopWorkspaceView : UserControl
         Classes.Add("workspace");
         Background = Brush("#F2F5F3");
         _service.Changed += OnChanged;
-        DetachedFromVisualTree += (_, _) => { _service.Changed -= OnChanged; _toastTimer?.Stop(); _hold.Stop(); _finishVoice?.Invoke(); };
+        DetachedFromVisualTree += (_, _) => { _service.Changed -= OnChanged; _toastTimer?.Stop(); _hold.Stop(); _finishVoice?.Invoke(); if (_hardwareKeys is not null) _hardwareKeys.KeyPressed -= OnHardwareKey; };
+        // 音量键：Android 由 MainActivity 注入实现（原版就是这样记条/撤回，单手戴手套也能用）；桌面为 null，走键盘快捷键。
+        _hardwareKeys = HardwareKeys.Current;
+        if (_hardwareKeys is not null) _hardwareKeys.KeyPressed += OnHardwareKey;
         _hold.Tick += (_, _) => { _hold.Stop(); if (_holding) { _held = true; Run(() => _service.SaveTakeAsync()); } };
         SizeChanged += (_, _) => { var compact = Bounds.Width < 820; if (compact != _compact) { _compact = compact; Render(); } };
         AddHandler(InputElement.KeyDownEvent, (_, e) => HandleShortcut(e), Avalonia.Interactivity.RoutingStrategies.Tunnel);
@@ -69,6 +74,22 @@ public sealed partial class DesktopWorkspaceView : UserControl
             e.Handled = true;
         }
         else if (e.Key == Key.Escape) { Navigate("record"); e.Handled = true; }
+    }
+
+    /// <summary>音量上 = 记一条（含滚动下一条），音量下 = 撤回（原版映射；仅记录页响应）。</summary>
+    private void OnHardwareKey(HardwareKey key)
+    {
+        if (_busy) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_busy || _page != "record") return;
+            if (key == HardwareKey.VolumeUp)
+            {
+                if (_service.State.PocketLock) Toast("口袋锁已开启，请长按记条按钮");
+                else Run(() => _service.SaveTakeAsync(), "已记一条 · 音量上键");
+            }
+            else AskUndo();
+        });
     }
 
     private static IBrush Brush(string hex) => new SolidColorBrush(Color.Parse(hex));
@@ -371,7 +392,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private Control BuildTimeline()
     {
         var page = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,*,Auto"), Background = Brush("#F4F5F8") };
-        page.Children.Add(PageHeader("02 / TAKE TIMELINE", "场记时间轴", B("导出 JSON", Export, "quiet", "export"), B("返回拍摄 ×", () => Navigate("record"), "quiet")));
+        page.Children.Add(PageHeader("02 / TAKE TIMELINE", "场记时间轴", B(_logDate is null ? "导出 JSON" : "导出当日", ExportTimeline, "quiet", "export"), B("返回拍摄 ×", () => Navigate("record"), "quiet")));
         _logSummary = Stack(8); _logSummary.Margin = new Thickness(24, 15, 24, 0); Grid.SetRow(_logSummary,1); page.Children.Add(_logSummary);
         _dates = Row(7); var dateScroll = new ScrollViewer { Content = _dates, Margin = new Thickness(24, 12, 24, 0), HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
         Grid.SetRow(dateScroll,2); page.Children.Add(dateScroll);
@@ -534,7 +555,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
     {
         WorkspaceDialog? dialog = null;
         var sceneName = _planScene.Length > 0 ? _planScene : _service.State.Scene;
-        var number = new TextBox { Text = item?.Name ?? "", PlaceholderText = "例如 12A" };
+        var number = new TextBox { Text = item?.Name ?? (insertIndex is null ? _service.NextPlanKey(sceneName, isScene) : ""), PlaceholderText = isScene ? "例如 12" : "例如 12A" };
         var type = new TextBox { Text = item?.Note.Type ?? "", PlaceholderText = isScene ? "场地名称" : "近景 / 特写 / 中景…" };
         var content = new TextBox { Text = item?.Note.Append ?? "", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 85, PlaceholderText = "概要与拍摄内容" };
         var objects = new TextBox { Text = string.Join("，",item?.Note.Objects ?? []), PlaceholderText = "人物或轨道，用逗号分隔" };
@@ -580,6 +601,9 @@ public sealed partial class DesktopWorkspaceView : UserControl
         var fileNumber = new NumericUpDown { Minimum = 1, Maximum = int.MaxValue - 1, Value = row.Item.FilenameNum, FormatString = "0" };
         var sceneNote = new TextBox { Text = row.Item.ScnNote, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap };
         var tracks = new TextBox { Text = string.Join("，", row.Item.Tracks ?? []), PlaceholderText = "人物 / 轨道，用逗号分隔" };
+        // 原版把「未占用的文件序号」做成候选列表，避免手输撞号；这里给出实际占用清单，保存时仍会拒绝重复。
+        var used = _service.UsedFileNumbers(row.Item.FilenamePrefix, row.Item.FilenameLinker);
+        var usedHint = T(used.Count == 0 ? "这套命名还没有已占用的文件序号" : "已占用：" + string.Join(", ", used), 11, "#8A9691");
         var error = T("",12,"#AD4C4C");
         var save = B("保存", async () =>
         {
@@ -592,7 +616,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
             try { await _service.DeleteLogAsync(row); dialog!.Close(); Toast("场记已删除，文件号保留"); }
             catch (Exception ex) { error.Text = ex.Message; }
         }, "danger");
-        dialog = Dialog("编辑场记",Stack(10,T($"{FormatDate(row.Date)} · {row.Item.Scn} 场 / {row.Item.Sht} 镜 · {row.TakeLabel}",12),T(row.Item.FileName,20,"#4E607E",true),T("文件序号"),fileNumber,T("次号（假条 999 / 补录 W 为 0）"),take,picture,sound,T("本场信息"),sceneNote,T("人物 / 录音轨道"),tracks,T("录音标注"),rec,T("镜头标注"),shot,error,Row(8,delete,B("取消",()=>dialog!.Close(),"quiet"),save)));
+        dialog = Dialog("编辑场记",Stack(10,T($"{FormatDate(row.Date)} · {row.Item.Scn} 场 / {row.Item.Sht} 镜 · {row.TakeLabel}",12),T(row.Item.FileName,20,"#4E607E",true),T("文件序号"),fileNumber,usedHint,T("次号（假条 999 / 补录 W 为 0）"),take,picture,sound,T("本场信息"),sceneNote,T("人物 / 录音轨道"),tracks,T("录音标注"),rec,T("镜头标注"),shot,error,Row(8,delete,B("取消",()=>dialog!.Close(),"quiet"),save)));
         await dialog!.ShowAsync();
     }
     private async void ShowSettings()
@@ -641,5 +665,27 @@ public sealed partial class DesktopWorkspaceView : UserControl
             Toast("计划与场记已导出");
         }
         catch(Exception ex){Toast("导出失败："+ex.Message,true);}
+    }
+    /// <summary>场记时间轴的导出：切到单日时只导出当天（原版按日导出），"全部日期"仍导出完整备份。</summary>
+    private async void ExportTimeline()
+    {
+        if (_logDate is null) { Export(); return; }
+        try
+        {
+            var date = _logDate;
+            var count = _service.DayCount(date);
+            if (count == 0) { Toast($"{FormatDate(date)} 还没有场记"); return; }
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "导出当日场记", SuggestedFileName = "VoiSlate-" + date + ".json", DefaultExtension = "json",
+                FileTypeChoices = [new FilePickerFileType("JSON") { Patterns = ["*.json"] }],
+            });
+            if (file is null) return;
+            await using var stream = await file.OpenWriteAsync(); stream.SetLength(0);
+            await using var writer = new StreamWriter(stream);
+            await writer.WriteAsync(_service.ExportDayJson(date));
+            Toast($"{FormatDate(date)} 的 {count} 条场记已导出");
+        }
+        catch (Exception ex) { Toast("导出失败：" + ex.Message, true); }
     }
 }

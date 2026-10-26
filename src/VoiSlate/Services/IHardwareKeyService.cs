@@ -21,5 +21,16 @@ public interface IHardwareKeyService
 /// <summary>桌面 no-op 实现。</summary>
 public sealed class NoopHardwareKeyService : IHardwareKeyService
 {
+#pragma warning disable CS0067 // no-op 实现事件永不触发
     public event Action<HardwareKey>? KeyPressed;
+#pragma warning restore CS0067
+}
+
+/// <summary>
+/// 平台硬件键通道的进程级注册表（与 <see cref="VoiSlate.Desktop.Speech.PcmCapture"/> 同构）。
+/// Android 在 MainActivity.OnCreate 里注入真实实现；其它平台保持 null，界面退回键盘快捷键。
+/// </summary>
+public static class HardwareKeys
+{
+    public static IHardwareKeyService? Current { get; set; }
 }

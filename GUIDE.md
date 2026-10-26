@@ -19,7 +19,7 @@ VoiSlate 是**声音场记无纸化工具**（拍板场记）：记录每一条�
 | 技术栈 | .NET 10（SDK 10.0.400）+ Avalonia 12.1.1 + CommunityToolkit.Mvvm 8.4.2 + LiteDB 5.0.21 + CsvHelper 33 + Serilog + Microsoft.Extensions.DependencyInjection |
 | 目标平台 | 桌面 `net10.0`（✅ 主目标）+ Android `net10.0-android`（✅ 真机已验证，`a326284`） |
 | ASR/录音/震动/Toast | 接口先行，Mock 实现（`MockAsrService`/`NoopHapticsService`/`NoopToastService` 等） |
-| 测试 | 330 通过 / 6 跳过 / 336（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身；跳过的 6 条是 `WindowsOnlyFactAttribute`） |
+| 测试 | 341 通过 / 6 跳过 / 347（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身；跳过的 6 条是 `WindowsOnlyFactAttribute`） |
 | 远程 | https://github.com/drunkenQCat/voislate-avalonia （main 分支） |
 
 ## 2. 目录地图
@@ -114,7 +114,7 @@ voislate-avalonia/
 # 前提：.NET SDK 10.0.400；Android 需 workload：dotnet workload install android
 # 桌面构建 / 测试（CI 同此）
 dotnet build VoiSlate.slnx -c Release        # 期望 0 warning 0 error
-dotnet test tests/VoiSlate.Tests -c Release  # 期望 330 passed / 6 skipped（共 336）
+dotnet test tests/VoiSlate.Tests -c Release  # 期望 341 passed / 6 skipped（共 347）
 
 # 桌面运行
 dotnet run --project src/VoiSlate -c Release
@@ -165,6 +165,12 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 - 窄屏（手机/小窗）：左栏列宽归零并隐藏，第 2 行插入 `BuildBottomNav()`（四等分 97px、高 56、选中 `#31574C`、`AutomationId = navb-record/navb-plan/navb-log/navb-settings`）。**注意**：主题给 `Button` 的默认 `HorizontalAlignment` 是 `Left`，导航按钮必须显式 `Stretch`，否则宽度只剩文字宽（实测 24px，触屏点不中）。
 - 页面切换 = `Navigate(key)`（把 key 归一为小写后置 `_page` 再 `Render()`）；键盘 `HandleShortcut`（Ctrl+1/2/3、Ctrl+Shift+Z、Ctrl+Enter、Esc）由薄壳 Window 以 Tunnel 方式转交，Android 无键盘路径。
 - 窄屏留白统一走 `PagePad(horizontal, vertical)`（compact 时夹到 14/12）。
+
+**P7 遗留缺口收口（2026-10-26，`docs/p7-vm-coverage.md` §8）**——删 P7 ViewModel 前补齐的现场能力，改这几处前先看该文档的回归用例表：
+- 音量键：`Services/IHardwareKeyService.cs` 的 `HardwareKeys.Current` 平台注册表 → `src/VoiSlate.Android/AndroidHardwareKeyService.cs` + `MainActivity.OnKeyDown`（上键记条、下键撤回，仅记录页且 `_busy=false`）。视图侧订阅在 `DesktopWorkspaceView` ctor，`DetachedFromVisualTree` 解绑。
+- 旧会话迁移：`Desktop/DesktopWorkspaceLegacy.cs` 的 `AdoptLegacySessionAsync()` 把老 `settings` 集合的 `project` 键 + `SessionKeys` 13 键一次性并入 `WorkspaceSession`；命名非法时保留默认而不阻塞启动。
+- 按日导出：`DesktopWorkspaceBackup.ExportDayJson(date)` / `DayCount(date)`；时间轴表头按钮在选定日期时变「导出当日」。
+- 计划守卫与编号：`DesktopWorkspaceEditing.DeletePlanItemAsync` 保留「至少 1 场 1 镜」且不再 `_undo.Clear()`；`UndoAsync` 会把已删除的场地重定位到存活条目；`NextPlanKey(scene, isScene)` 给新建预填下一个编号；`UsedFileNumbers(prefix, linker)` 在场记编辑框里提示已占用序号。
 
 > **2026-10-25 迁移**：下表描述的是**已删除**的 P7 手机壳（`Views/{MainWindow,RecordView,ScheduleView,SlateLogView,SettingsView,LogEditorWindow,QuickViewLogWindow,SmallEditDialog}.axaml`，16 个文件）。桌面与 Android 现统一走 `Desktop/DesktopWorkspaceView`（记录/计划/时间轴 + 工程与偏好四项），下表仅作历史对照与交互行为参考——这些交互行为在 `DesktopWorkspace*.cs` 里以代码构建的方式一一对应。
 
@@ -243,7 +249,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 
 ## 10. 测试矩阵（tests/VoiSlate.Tests，xUnit，无 Moq 全手写 Fake/Stub/Spy）
 
-约 228 `[Fact]` + 11 `[Theory]`（≈51 行 InlineData），合计 **285 用例全绿**。
+约 239 `[Fact]` + 11 `[Theory]`（≈51 行 InlineData），合计 **341 用例全绿 / 6 跳过（共 347）**。
 
 | 组 | 文件（节选） | 覆盖 |
 |---|---|---|
@@ -271,7 +277,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 - [ ] Android Manifest 主题保持 AppCompat 系列
 - [ ] 改界面只改 `Desktop/DesktopWorkspaceView.cs`（+ 4 个分部类）；窄屏改动后跑 `WorkspacePhoneLayoutTests`（390×840 下底部 Tab 必须 4 等分、高 ≥44、三页无控件越界）
 - [ ] 新增源文件放 src/VoiSlate 对应子目录（SDK glob 免改 csproj）；测试放 tests/VoiSlate.Tests 对应子目录，**只新增文件不改既有文件**
-- [ ] 桌面回归：`dotnet build` 0w/0e + `dotnet test` 285/285
+- [ ] 桌面回归：`dotnet build` 0w/0e + `dotnet test` 341/347（6 跳过属正常）
 - [ ] Android 改动 → 发 arm64 APK → 真机安装启动验证（崩溃查 logcat FATAL）
 
 ## 13. 当前状态里程碑
