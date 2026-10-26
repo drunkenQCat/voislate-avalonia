@@ -70,6 +70,9 @@ public sealed partial class DesktopWorkspaceService
     });
     private (SceneSchedule Scene, ScheduleItem? Shot, int Index)? _deletedPlan;
     public bool CanRestorePlan => _deletedPlan is not null;
+
+    /// <summary>作废「最近删除」的恢复点。原版 SnackBar 上的「恢复」一旦消失就恢复不了，这里同语义。</summary>
+    public void DiscardRestore() => _deletedPlan = null;
     public Task DeletePlanItemAsync(string sceneName, string? shotName) => Change(async () =>
     {
         var scene = Scenes.FirstOrDefault(s => s.Info.Name == sceneName) ?? throw new InvalidOperationException("场次已不存在");

@@ -15,6 +15,9 @@ using VoiSlate.Services;
 
 namespace VoiSlate.Desktop;
 
+/// <summary>提示条语气：Info＝原版 fluttertoast 的黑底提示；Done＝成功；Error＝失败（红底、多留 2 秒）。</summary>
+internal enum ToastTone { Info, Done, Error }
+
 /// <summary>Native Windows workspace. Rendering is a projection of the service, never the data store.</summary>
 public sealed partial class DesktopWorkspaceView : UserControl
 {
@@ -36,6 +39,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private bool _rendering; // Render 重入保护
     private bool _busy, _compact;
     private DispatcherTimer? _toastTimer;
+    private Action? _toastOnExpire;
     private readonly DispatcherTimer _hold = new() { Interval = TimeSpan.FromMilliseconds(650) };
     private bool _holding, _held;
     private Action? _finishVoice;
@@ -143,13 +147,74 @@ public sealed partial class DesktopWorkspaceView : UserControl
         Run(async () => { await _service.UndoAsync(); Haptics.Undone(); },
             "上一条编号、评价与标注已恢复，可修改后重新保存");
 
-    private void Toast(string message, bool error = false)
+    private void Toast(string message, bool error = false) =>
+        Toast(message, error ? ToastTone.Error : ToastTone.Info);
+
+    /// <summary>
+    /// 单槽提示条，语义对齐 Flutter 原版的两套东西：
+    /// ①`Fluttertoast.showToast` —— 纯文本、约 2 秒、无操作（`record_page.dart:333/354/408/557`）；
+    /// ②`ScaffoldMessenger.showSnackBar` —— 5 秒 + 一个「恢复」动作（`scene_schedule_page.dart:68/94`）。
+    /// 所以这里多出 `action`/`onAction`/`onExpire` 三件套：动作按钮即原版 SnackBarAction，
+    /// 窗口过去后 `onExpire` 负责把「可撤销状态」一并作废，避免出现「提示没了但还能恢复」的错位。
+    /// </summary>
+    private void Toast(string message, ToastTone tone, double seconds = 0, string? action = null,
+        Action? onAction = null, Action? onExpire = null)
     {
-        _toastTimer?.Stop(); _toast.Child = T(message, 13, "#FFFFFF"); _toast.Background = Brush(error ? "#9A4848" : "#2C4249");
+        _toastTimer?.Stop(); _toastTimer = null;
+        var text = T(message, 13, "#FFFFFF");
+        text.TextWrapping = TextWrapping.Wrap; text.MaxWidth = 420;
+        if (action is null)
+        {
+            _toast.Child = text;
+            _toast.IsHitTestVisible = false;    // 纯提示不该挡住底下的按钮
+        }
+        else
+        {
+            text.PointerPressed += (_, e) => { e.Handled = true; DismissToast(); };   // 点提示本体 = 放弃动作（等价于滑掉原版 SnackBar）
+            var button = B(action, () => { DismissToast(expired: false); onAction?.Invoke(); }, "toast-action", "toast-action");
+            button.Foreground = Brush("#FFE9A8"); button.Background = Brushes.Transparent;
+            button.BorderThickness = new Thickness(0); button.Padding = new Thickness(6, 2);
+            _toast.Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 10,
+                Children = { text, button }
+            };
+            _toast.IsHitTestVisible = true;
+        }
+        _toast.Background = Brush(tone switch { ToastTone.Error => "#9A4848", ToastTone.Done => "#2F5A44", _ => "#2C4249" });
         _toast.IsVisible = true;
-        _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _toastTimer.Tick += (_, _) => { _toast.IsVisible = false; _toastTimer.Stop(); }; _toastTimer.Start();
+        // 时长：原版 fluttertoast 默认 LENGTH_SHORT≈2s、显式 timeInSecForIosWeb:1；
+        // SnackBar 显式 5s；错误多给 2s 让人读完。
+        var lifetime = seconds > 0 ? seconds : tone == ToastTone.Error ? 4 : action is null ? 2.2 : 5;
+        _toastOnExpire = onExpire;
+        _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(lifetime) };
+        _toastTimer.Tick += (_, _) => DismissToast();
+        _toastTimer.Start();
     }
+
+    /// <summary>
+    /// 收起提示。`expired` 区分「窗口自然结束」与「点了动作按钮」：
+    /// 前者要连带作废可撤销状态（原版 SnackBar 消失了「恢复」也就没了），后者不能作废——
+    /// 否则 onExpire 会先清掉刚被点中的恢复点。
+    /// </summary>
+    private void DismissToast(bool expired = true)
+    {
+        _toastTimer?.Stop(); _toastTimer = null; _toast.IsVisible = false;
+        var window = _toastOnExpire; _toastOnExpire = null;
+        if (expired) window?.Invoke();
+    }
+
+    /// <summary>测试用：立刻让当前提示条「过期」，用来验证 onExpire 的副作用。</summary>
+    internal void ExpireToast() => DismissToast();
+
+    /// <summary>测试用：当前提示条文字与可见性（提示条不是 Automation 控件，断言只能走这里）。</summary>
+    internal string? ToastText => _toast.Child switch
+    {
+        TextBlock text => text.Text,
+        StackPanel panel => panel.Children.OfType<TextBlock>().FirstOrDefault()?.Text,
+        _ => null,
+    };
+    internal bool ToastVisible => _toast.IsVisible;
     private void Navigate(string page)
     {
         _finishVoice?.Invoke(); _page = page;
@@ -179,8 +244,15 @@ public sealed partial class DesktopWorkspaceView : UserControl
         frame.Children.Add(_shell);
         if (_compact) frame.Children.Add(BuildPagerDots());
         _root.Children.Add(frame);
-        _toast = Box(T(""), "#2C4249", 14); _toast.MaxWidth = 560; _toast.IsVisible = false; _toast.Margin = new Thickness(20, 0, 20, 80);
-        _toast.HorizontalAlignment = HorizontalAlignment.Center; _toast.VerticalAlignment = VerticalAlignment.Bottom; _root.Children.Add(_toast);
+        // 提示条只建一次：每次重画都新建会把正在显示的那条（含它的动作按钮）一起吞掉——
+        // 翻页、改窗口尺寸、存一条场记都会触发 Render()，用户会看到提示莫名消失。
+        if (_toast is null)
+        {
+            _toast = Box(T(""), "#2C4249", 14); _toast.MaxWidth = 560; _toast.IsVisible = false; _toast.Margin = new Thickness(20, 0, 20, 80);
+            _toast.HorizontalAlignment = HorizontalAlignment.Center; _toast.VerticalAlignment = VerticalAlignment.Bottom;
+        }
+        else if (_toast.Parent is Panel oldToastParent) oldToastParent.Children.Remove(_toast); // 换父级前先摘
+        _root.Children.Add(_toast);
         if (_overlayLayer.Parent is Panel oldParent) oldParent.Children.Remove(_overlayLayer); // 换父级前先摘，否则 "already has a visual parent"
         _root.Children.Add(_overlayLayer); // 弹层宿主：跨重渲染存活（对象本身是字段）
         Content = _root;
@@ -461,7 +533,6 @@ public sealed partial class DesktopWorkspaceView : UserControl
             var sceneName = scene.Info.Name; var done = scene.Count(sh => _service.Progress(sceneName, sh.Name) == ShotProgress.Done);
             _sceneNav.Children.Add(B($"{sceneName} 场  ·  {done}/{scene.Count}", () => { _planScene = sceneName; _inspectShot = null; RenderPlanContents(); if (_planScroll is not null) _planScroll.Offset = default; }, _planScene == sceneName ? "selected" : ""));
         }
-        if (_service.CanRestorePlan) _planBody.Children.Add(B("↶ 恢复最近删除的计划", () => Run(() => _service.RestorePlanItemAsync()), "quiet"));
         var selected = visible.FirstOrDefault(s => s.Info.Name == _planScene);
         if (selected is null)
         {
@@ -627,9 +698,18 @@ public sealed partial class DesktopWorkspaceView : UserControl
     {
         _finishVoice?.Invoke(); WorkspaceDialog? dialog = null;
         var body = Stack(10);
-        var end = B("✓ 保存并结束本镜", () => { dialog!.Close(); SaveTake(end: true, success: "最后一条已保存，本镜结束"); }, "primary"); end.IsEnabled = !_service.Draft.Ended && _service.Shot is not null;
+        var end = B("✓ 保存并结束本镜", () => { dialog!.Close(); SaveTake(end: true, success: "镜头结束，画面与声音默认评价为优良"); }, "primary"); end.IsEnabled = !_service.Draft.Ended && _service.Shot is not null;
         body.Children.Add(end); body.Children.Add(T("未评项设为画面保 / 声音可，保留已有评价。", 11, "#8A9988"));
-        body.Children.Add(B(_service.State.Linked ? "进入补录模式" : "退出补录模式", () => { dialog!.Close(); Run(() => _service.ToggleRetakeAsync()); }));
+        body.Children.Add(B(_service.State.Linked ? "进入补录模式" : "退出补录模式", () =>
+        {
+            dialog!.Close();
+            // 文案取自原版 record_page.dart:557（isLinked 为新状态）：联动恢复＝已取消补录，否则＝进入补录。
+            Run(async () =>
+            {
+                await _service.ToggleRetakeAsync();
+                Toast(_service.State.Linked ? "已取消补录模式" : "进入补录模式，Take 号与文件号解绑");
+            });
+        }));
         body.Children.Add(T("补录用 A、B、C 标识；次号冻结，文件号继续前进。", 11, "#8A9988"));
         body.Children.Add(B("手动改号 · 场 / 镜 / 次", () => { dialog!.Close(); ShowRenum(); }));
         body.Children.Add(B("记录假条 F", () => { dialog!.Close(); SaveTake(fake: true, success: "假条已保存，文件号前进，正常次号保留"); }));
@@ -704,10 +784,18 @@ public sealed partial class DesktopWorkspaceView : UserControl
                 B("下移", () => { dialog!.Close(); Run(() => _service.MovePlanItemAsync(ownerScene, shotName, 1)); }),
                 B("前面插入", () => { dialog!.Close(); ShowPlanEditor(null, isScene, index); }),
                 B("后面插入", () => { dialog!.Close(); ShowPlanEditor(null, isScene, index + 1); })));
-            body.Children.Add(B("删除" + (isScene ? "此场次" : "此镜头"), async () =>
+            body.Children.Add(B("删除" + (isScene ? "此场次" : "此镜头"), () =>
             {
-                if (!await Confirm("删除计划条目", "删除此计划条目？已保存场记会保留，可在计划页恢复最近一次删除。")) return;
-                dialog!.Close(); Run(() => _service.DeletePlanItemAsync(ownerScene, shotName), "计划条目已删除，可在计划页恢复");
+                // 对齐原版 scene_schedule_page.dart:68/94：滑动删除不弹确认，改成「删了就删了 + 5 秒内可恢复」。
+                var name = isScene ? ownerScene : shotName ?? "";
+                dialog!.Close();
+                Run(async () =>
+                {
+                    await _service.DeletePlanItemAsync(ownerScene, shotName);
+                    Toast($"第 {name} {(isScene ? "场" : "镜")}已删除", ToastTone.Info, 5, "恢复",
+                        () => Run(() => _service.RestorePlanItemAsync(), "计划条目已恢复"),
+                        () => { _service.DiscardRestore(); RenderPlanContents(); });   // 窗口过去 = 恢复点作废，和原版一致
+                });
             }, "danger"));
         }
         dialog = Dialog((item is null ? "添加" : "编辑") + (isScene ? "场次" : "镜头"), body);

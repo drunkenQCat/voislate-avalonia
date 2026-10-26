@@ -215,6 +215,21 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 - **不要用 `HasAmplitudeControl` 去「纠正」幅度**：RMX5060 上该探针返回 false，但显式幅度照样被 HAL 采纳（真机日志 `amplitude` 由 `1.0` 变成 `0.50`）。传请求值即可。
 - manifest 必须声明 `android.permission.VIBRATE`（普通权限，装包即授予，无需运行时弹窗）。
 
+#### 提示条（Toast）：原版两种语义，一个控件
+
+Flutter 原版用了两套东西，行为完全不同，迁移时不能合并成「一条 3 秒的灰条」：
+
+| 原版 | 形态 | 我方落点 |
+|---|---|---|
+| `Fluttertoast.showToast`（`record_page.dart:333/354/408/557`、`tag_chips.dart:63`） | 纯文本、约 2 秒、无操作、黑底白字 | `Toast(msg)` / `Toast(msg, ToastTone.Info)` → 2.2 秒 |
+| `ScaffoldMessenger.showSnackBar` + `SnackBarAction`（`scene_schedule_page.dart:68/94`，`duration: 5s`，label `恢复`） | 5 秒 + 一个动作按钮 | `Toast(msg, ToastTone.Info, 5, "恢复", onAction, onExpire)` |
+
+- 入口在 `DesktopWorkspaceView`：`Toast(message, tone, seconds = 0, action = null, onAction = null, onExpire = null)`；旧的 `Toast(msg, bool error)` 保留为薄转发。时长优先级＝显式 `seconds` > 错误 4s > 无动作 2.2s > 有动作 5s。
+- **`onExpire` 是「可撤销状态」的寿命**：计划条目删除后恢复点只有 5 秒（`DesktopWorkspaceEditing.DiscardRestore()`），超时就真的恢复不了——原版 SnackBar 消失后「恢复」也就没了。因此 `DismissToast(bool expired)` 必须区分「自然过期」（触发 `onExpire`）与「点了动作」（`expired: false`，**不能**触发，否则会先清掉刚被点中的恢复点）。
+- 纯提示的 `IsHitTestVisible = false`（不挡底下的按钮）；带动作的才可点，点提示本体＝放弃动作（等价于滑掉 SnackBar）。
+- **提示条控件只创建一次**（`Render()` 里 `if (_toast is null)`）：翻页、改窗口尺寸、存一条场记都会触发 `Render()`，每次重建会把正在显示的那条连动作按钮一起吞掉，用户看到的是「提示莫名消失」。
+- 回归用例：`WorkspaceToastTests.cs`（删除→提示带「恢复」且点了真恢复、恢复点作废后不可恢复、结束本镜沿用原版文案「镜头结束，画面与声音默认评价为优良」）。测试断言用 `internal string? ToastText` / `ExpireToast()`（提示条不是 Automation 控件）。
+
 #### 语音摇杆（Android）：两个只在真机触摸上暴露的坑
 
 摇杆实现在 `Desktop/DesktopWorkspaceSpeech.cs` 的 `BuildVoice()` + `AttachJoyGestures()`。
