@@ -19,7 +19,7 @@ VoiSlate 是**声音场记无纸化工具**（拍板场记）：记录每一条�
 | 技术栈 | .NET 10（SDK 10.0.400）+ Avalonia 12.1.1 + CommunityToolkit.Mvvm 8.4.2 + LiteDB 5.0.21 + CsvHelper 33 + Serilog + Microsoft.Extensions.DependencyInjection |
 | 目标平台 | 桌面 `net10.0`（✅ 主目标）+ Android `net10.0-android`（✅ 真机已验证，`a326284`） |
 | ASR/录音/震动/Toast | 接口先行，Mock 实现（`MockAsrService`/`NoopHapticsService`/`NoopToastService` 等） |
-| 测试 | 285 通过 / 6 跳过 / 291（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身；跳过的 6 条是 `WindowsOnlyFactAttribute`） |
+| 测试 | 286 通过 / 6 跳过 / 292（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身；跳过的 6 条是 `WindowsOnlyFactAttribute`） |
 | 远程 | https://github.com/drunkenQCat/voislate-avalonia （main 分支） |
 
 ## 2. 目录地图
@@ -112,7 +112,7 @@ voislate-avalonia/
 # 前提：.NET SDK 10.0.400；Android 需 workload：dotnet workload install android
 # 桌面构建 / 测试（CI 同此）
 dotnet build VoiSlate.slnx -c Release        # 期望 0 warning 0 error
-dotnet test tests/VoiSlate.Tests -c Release  # 期望 285 passed / 6 skipped（共 291）
+dotnet test tests/VoiSlate.Tests -c Release  # 期望 286 passed / 6 skipped（共 292）
 
 # 桌面运行
 dotnet run --project src/VoiSlate -c Release
@@ -245,7 +245,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 
 ## 10. 测试矩阵（tests/VoiSlate.Tests，xUnit，无 Moq 全手写 Fake/Stub/Spy）
 
-约 200 `[Fact]` + 11 `[Theory]`（≈51 行 InlineData），合计 **285 用例全绿 / 6 跳过（共 291）**（2026-10-26 删 P7 的 56 条 VM 用例后）。
+约 200 `[Fact]` + 11 `[Theory]`（≈51 行 InlineData），合计 **286 用例全绿 / 6 跳过（共 292）**（2026-10-26 删 P7 的 56 条 VM 用例后）。
 
 | 组 | 文件（节选） | 覆盖 |
 |---|---|---|
@@ -273,7 +273,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 - [ ] Android Manifest 主题保持 AppCompat 系列
 - [ ] 改界面只改 `Desktop/DesktopWorkspaceView.cs`（+ 4 个分部类）；窄屏改动后跑 `WorkspacePhoneLayoutTests`（390×840 下底部 Tab 必须 4 等分、高 ≥44、三页无控件越界）
 - [ ] 新增源文件放 src/VoiSlate 对应子目录（SDK glob 免改 csproj）；测试放 tests/VoiSlate.Tests 对应子目录，**只新增文件不改既有文件**
-- [ ] 桌面回归：`dotnet build` 0w/0e + `dotnet test` 285/291（6 跳过属正常）
+- [ ] 桌面回归：`dotnet build` 0w/0e + `dotnet test` 286/292（6 跳过属正常）
 - [ ] Android 改动 → 发 arm64 APK → 真机安装启动验证（崩溃查 logcat FATAL）
 
 ## 13. 当前状态里程碑
