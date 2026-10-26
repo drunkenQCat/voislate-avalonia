@@ -224,9 +224,13 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 
 排障：`adb logcat -s VoiSlateTrace`（`Services/Diagnostics.cs` 的静态 Sink，`AndroidApp` 构造里接到 `Android.Util.Log`），正常一次拖动应看到 `[JOY] press …` → `[JOY] move delta=… target=rec` → `[JOY] release target=rec`。
 
+3. **松手处理器一定要先判断「这次手势是我的」** —— 处理器挂在视图上 + `Tunnel` + `handledEventsToo`，意味着它会收到**全页每一次**按下/移动/松手。两个在此踩过的坑，都已加 `_joyActive` 守卫与回归用例：
+   - 松手时无条件 `e.Pointer.Capture(null)`：会在 `Button` 自己被派发 `PointerReleased` **之前**摘掉捕获 → Button 立刻 `PointerCaptureLost` → `IsPressed=false` → `Click` 永不触发。表现是**整个 App 所有按钮都点不动**（真机 + headless 同时复现；此前所有 UI 用例都用 `Invoke()` 直接 `RaiseEvent(Button.ClickEvent)`，把命中和捕获整条链路绕过去了，所以测试全绿）。用例：`Ui_buttons_receive_real_pointer_clicks`。
+   - 用 `e.GetPosition(_joyArea)` + `IsEffectivelyVisible` 判命中：切到计划页/时间轴后 `_joyArea` 还指向上一页那个**已脱离可视树**的摇杆，`IsEffectivelyVisible` 无父级时按 `true` 算、`GetPosition` 对不在树上的控件返回 `(0,0)` → 位置检查全过 → **任何一次点击都被当成按住摇杆**，每点一下就开始录一嗓子，真机表现为「界面卡死」。现在 `Render()` 开头把 `_joyArea/_joyPress/_joyMove/_joyRelease` 全部清空、只由记录页重新装填，命中判定统一走 `InsideJoy(e.GetPosition(this))`（内部要求 `joy.GetVisualAncestors().Contains(this)`）。用例：`Ui_voice_joystick_target_is_cleared_when_leaving_the_record_page`。
+
 #### 语音采集停止（Android）
 
-`AndroidPcmCapture.Pump()` 的循环条件必须是 `while (!_stopRequested)`：真机实测 **`AudioRecord.Read` 在 `Stop()` 瞬间返回 0（不是负数）**，原先的 `if (read <= 0) continue;` 会让采集线程空转不退，`StopAsync()` 等 3 秒后抛 .NET 英文 `TimeoutException`，被 `Finish()` 的兜底 catch 原样弹成 toast（用户看到的就是那句莫名的 `timeout`）。现在 `read < 0` 视为致命（中文错误）、`read == 0` 睡 5ms 再试、`StopAsync` 超时则就地 `TryComplete()` + `Release()` 收尾，并把 `TimeoutException` 映射成中文提示。
+`AndroidPcmCapture.Pump()` 的循环条件必须是 `while (!_stopRequested)`：真机实测 **`AudioRecord.Read` 在 `Stop()` 瞬间返回 0（不是负数）**，原先的 `if (read <= 0) continue;` 会让采集线程空转不退，`StopAsync()` 等 3 秒后抛 .NET 英文 `TimeoutException`，被 `Finish()` 的兜底 catch 原样弹成 toast（用户看到的就是那句莫名的 `timeout`）。现在 `read < 0` 视为致命（中文错误）、`read == 0` 睡 5ms 再试、`StopAsync` 超时则只 `TryComplete()` 收口（**不 Release**），并把 `TimeoutException` 映射成中文提示。`Dispose()` 必须「先 `Stop()` → 等采集线程退出（最多 2s）→ 才 `Release()` 原生对象」：采集线程还阻塞在原生 `Read()` 里时并发 `Release()` 是 SIGSEGV，进程无 Java 异常直接消失（logcat 只剩 `Death received`）；等待失败时宁可泄漏 `AudioRecord` 也不 Release。
 
 ## 9. 模块地图（Services / ViewModels / Controls / 数据层）
 

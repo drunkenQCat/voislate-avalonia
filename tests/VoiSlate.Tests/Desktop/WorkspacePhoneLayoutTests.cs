@@ -147,4 +147,75 @@ public sealed partial class DesktopWorkspaceTests
         }
         finally { window.Close(); }
     });
+
+    /// <summary>
+    /// 回归钉子：视图层挂了 Tunnel + handledEventsToo 的手势处理器（摇杆、翻页），它们会收到全页每一次
+    /// 按下/松手。之前摇杆的松手处理器**无条件** `PointerCapture(null)`，在 Button 收到 PointerReleased
+    /// 之前就摘掉捕获 → Button 立刻 PointerCaptureLost → IsPressed=false → Click 永不触发，
+    /// 表现为「整个 App 所有按钮都点不动」。真实指针事件必须能走完一次 Button.Click。
+    /// </summary>
+    [Fact]
+    public Task Ui_buttons_receive_real_pointer_clicks() => RunUi(async () =>
+    {
+        using var f = await Create();
+        var window = await WindowFor(f);
+        try
+        {
+            window.Width = 390; window.Height = 840; Dispatcher.UIThread.RunJobs();
+            var gear = Control<Button>(window, "open-settings");
+            var clicked = 0;
+            gear.Click += (_, _) => clicked++;
+            Click(window, gear);
+            Assert.True(clicked == 1, $"记录页页头 ⚙ 没收到 Click（clicked={clicked}）—— 按钮被手势处理器吃掉了");
+        }
+        finally { window.Close(); }
+
+        var wide = await WindowFor(f);
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            var rail = Control<Button>(wide, "nav-plan");
+            var clicked = 0;
+            rail.Click += (_, _) => clicked++;
+            Click(wide, rail);
+            Assert.True(clicked == 1, $"宽屏左栏按钮没收到 Click（clicked={clicked}）");
+            Assert.True(wide.View.CurrentPage == "plan", "宽屏点左栏「拍摄计划」应切页");
+        }
+        finally { wide.Close(); }
+    });
+
+    private static void Click(Window window, Button button)
+    {
+        var origin = button.TranslatePoint(new Point(0, 0), window)!.Value;
+        var center = new Point(origin.X + button.Bounds.Width / 2, origin.Y + button.Bounds.Height / 2);
+        window.MouseMove(center);
+        window.MouseDown(center, MouseButton.Left);
+        window.MouseUp(center, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
+    /// 回归钉子：切到计划页/时间轴后，摇杆手势目标必须清空。
+    /// 之前 _joyArea 仍指向上一页那个已脱离可视树的摇杆，`IsEffectivelyVisible` 依旧为 true、
+    /// `GetPosition(area)` 返回 (0,0) 让位置检查全过 —— 于是**任何一次点击都被当成按住了摇杆**，
+    /// 每点一下就开始录一嗓子，真机上表现为整个界面卡死。
+    /// </summary>
+    [Fact]
+    public Task Ui_voice_joystick_target_is_cleared_when_leaving_the_record_page() => RunUi(async () =>
+    {
+        using var f = await Create(); var window = await WindowFor(f);
+        try
+        {
+            window.Width = 390; window.Height = 840; Dispatcher.UIThread.RunJobs();
+            var view = window.View;
+            Assert.True(view.VoiceGestureArmed, "记录页应当装填摇杆手势目标");
+            Invoke(Control<Button>(window, "open-plan"));
+            Assert.Equal("plan", view.CurrentPage);
+            Assert.False(view.VoiceGestureArmed, "离开记录页后摇杆手势目标必须清空，否则每次点击都会触发录音");
+            Invoke(Control<Button>(window, "nav-back"));
+            Assert.Equal("record", view.CurrentPage);
+            Assert.True(view.VoiceGestureArmed, "回到记录页后应当重新装填");
+        }
+        finally { window.Close(); }
+    });
 }

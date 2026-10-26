@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Avalonia.Platform.Storage;
 using VoiSlate.Models;
 using VoiSlate.Services;
@@ -31,6 +32,8 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private ShotProgress? _planFilter;
     private LogFilter _logFilter;
     private string? _logDate, _scopeScene, _scopeShot, _inspectShot;
+    private bool _joyActive; // 摇杆手势是否正在进行（避免全页松手都当摇杆收尾）
+    private bool _rendering; // Render 重入保护
     private bool _busy, _compact;
     private DispatcherTimer? _toastTimer;
     private readonly DispatcherTimer _hold = new() { Interval = TimeSpan.FromMilliseconds(650) };
@@ -157,7 +160,14 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private int ShotCount => _service.Scenes.Sum(s => s.Count);
     private void Render()
     {
+        if (_rendering) return; // 重入保护：页面切换会触发 Cancel，Cancel 又可能要求重画，
+                                // 一旦成环就是无限递归 → 栈溢出 → 进程静默消失（Android 上只留一条 Death received）
+        _rendering = true;
+        try
+        {
         _finishVoice?.Invoke(); _hold.Stop(); _holding = false;
+        // 每次重建都把摇杆手势目标清空：只有记录页会重新装填，其它页绝不能再拿上一页的旧控件做命中判定。
+        _joyArea = null; _joyPress = null; _joyMove = null; _joyRelease = null; _joyActive = false;
         _root = new Grid(); _shell = new Grid { ColumnDefinitions = new ColumnDefinitions(_compact ? "0,*" : "184,*") };
         _rail = Box(BuildRail(), "#173F49", 18, radius: 0); _rail.IsVisible = !_compact;
         _host = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
@@ -175,6 +185,8 @@ public sealed partial class DesktopWorkspaceView : UserControl
         Content = _root;
         _recordScroll = _planScroll = _logScroll = null; // 换页后旧滚动器已经分离，别留着判边界
         _host.Content = _page switch { "plan" => BuildPlan(), "log" => BuildTimeline(), _ => BuildRecord() };
+        }
+        finally { _rendering = false; }
     }
     /// <summary>页面留白：窄屏减半，否则 390 宽的手机上左右 48px 会被吃掉 1/5。</summary>
     private Thickness PagePad(double horizontal, double vertical) =>
@@ -246,6 +258,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private bool InsideJoy(Point point)
     {
         if (_joyArea is not { IsEffectivelyVisible: true } joy) return false;
+        if (!joy.GetVisualAncestors().Contains(this)) return false; // 旧页面的摇杆已经脱离当前视图
         if (joy.TranslatePoint(new Point(0, 0), this) is not { } origin) return false;
         return point.X >= origin.X - 8 && point.X <= origin.X + joy.Bounds.Width + 8
             && point.Y >= origin.Y - 8 && point.Y <= origin.Y + joy.Bounds.Height + 8;

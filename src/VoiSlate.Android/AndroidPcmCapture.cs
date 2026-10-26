@@ -22,7 +22,8 @@ internal sealed class AndroidPcmCapture : IPcmCapture
     private readonly TaskCompletionSource _stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private AudioRecord? _record;
     private Thread? _pump;
-    private bool _started, _stopRequested;
+    private bool _started, _stopRequested, _released;
+    private readonly object _gate = new();
 
     public AndroidPcmCapture(int deviceNumber) => DeviceNumber = deviceNumber;
 
@@ -59,11 +60,14 @@ internal sealed class AndroidPcmCapture : IPcmCapture
     private void Pump()
     {
         var buffer = new byte[BytesPerBlock];
+        // 本地抓一份引用：Release 之后 _record 会被置空，循环里再读字段会 NRE，也不该让主线程
+        // 在采集线程还卡在 Read() 里的时候就把原生对象释放掉（那是 SIGSEGV，进程直接没）。
+        var record = _record;
         try
         {
             while (!_stopRequested)
             {
-                var read = _record?.Read(buffer, 0, buffer.Length) ?? 0;
+                var read = record?.Read(buffer, 0, buffer.Length) ?? 0;
                 if (read < 0) { _audio.Writer.TryComplete(new IOException("麦克风读取失败，请重新标注")); return; }
                 // 真机实测：AudioRecord 在停止瞬间会返回 0（不是负数），原来的 `<= 0 → continue`
                 // 会让采集线程空转不退，StopAsync 等 3 秒后抛英文 TimeoutException 给用户看。
@@ -90,11 +94,11 @@ internal sealed class AndroidPcmCapture : IPcmCapture
         try { await _stopped.Task.WaitAsync(TimeSpan.FromSeconds(3)); }
         catch (TimeoutException)
         {
-            // 采集线程万一卡在 Read 上，就地收尾：把流关掉让识别链路结束，别把 .NET 的英文超时抛给用户。
-            VoiSlate.Services.Diagnostics.Log("[PCM] stop timeout, forcing completion");
+            // 采集线程万一卡在 Read 上：只把流关掉让识别链路结束（用户看到的仍是「录音停止超时」中文提示），
+            // 但**不要**在这里 Release —— 采集线程还停在原生 Read() 里，同时 Release 会直接 SIGSEGV。
+            // 原生对象交给 Dispose（它会先等线程退出再释放）。
+            VoiSlate.Services.Diagnostics.Log("[PCM] stop timeout, leaving release to Dispose");
             _audio.Writer.TryComplete();
-            try { _record?.Release(); } catch { /* 已释放 */ }
-            _record = null;
         }
     }
 
@@ -104,13 +108,28 @@ internal sealed class AndroidPcmCapture : IPcmCapture
         await foreach (var block in _audio.Reader.ReadAllAsync(ct)) yield return block;
     }
 
+    /// <summary>
+    /// 收尾必须「先停、再等线程退出、最后释放原生对象」。
+    /// 真机实测：原实现在采集线程仍阻塞于 AudioRecord.Read() 时就 Release()，进程无 Java 异常直接消失
+    /// （logcat 只有 `Death received`）。释放失败也好过崩进程，所以宁可泄漏也不抢着 Release。
+    /// </summary>
     public void Dispose()
     {
-        try { _record?.Stop(); } catch { }
-        try { _record?.Release(); } catch { }
-        _record = null;
+        lock (_gate)
+        {
+            if (_released) return;
+            _released = true;
+        }
+        _stopRequested = true;
+        try { _record?.Stop(); } catch { /* 已停止或未初始化 */ }
         _audio.Writer.TryComplete();
-        _stopped.TrySetResult();
+        var drained = false;
+        try { drained = _stopped.Task.Wait(TimeSpan.FromSeconds(2)); } catch { /* 已取消 */ }
+        if (!drained) VoiSlate.Services.Diagnostics.Log("[PCM] dispose: pump still running, skip native release");
+        var record = _record;
+        _record = null;
+        if (!drained) return; // 线程还在 Read() 里，宁可泄漏 AudioRecord 也不 Release
+        try { record?.Release(); } catch { /* 已释放 */ }
     }
 }
 

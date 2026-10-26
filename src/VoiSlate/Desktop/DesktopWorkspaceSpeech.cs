@@ -16,6 +16,9 @@ public sealed partial class DesktopWorkspaceView
     private readonly Func<int, IPcmCapture> _captureFactory;
     private bool _joyGesturesAttached;
     private Control? _joyArea;
+
+    /// <summary>摇杆手势目标是否已装填（只有记录页为真；测试用来钉住「切页后不能拿旧控件做命中判定」）。</summary>
+    internal bool VoiceGestureArmed => _joyArea is not null;
     private Action<double>? _joyPress;
     private Action<double>? _joyMove;
     private Func<Task>? _joyRelease;
@@ -34,10 +37,16 @@ public sealed partial class DesktopWorkspaceView
         _joyGesturesAttached = true;
         AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
-            if (_joyPress is null || _joyArea is not { } area || !area.IsEffectivelyVisible) return;
+            if (_joyPress is null || _joyArea is not { } area) return;
             if (e.Pointer.Type == PointerType.Mouse && !e.GetCurrentPoint(area).Properties.IsLeftButtonPressed) return;
+            // 命中判定必须用「相对视图」的坐标 + TranslatePoint：
+            // 切到计划页/时间轴后 _joyArea 可能还指向上一页那个已经脱离可视树的摇杆，
+            // 此时 area.IsEffectivelyVisible 仍是 true（无父级时按 true 算），而 e.GetPosition(area)
+            // 对不在树上的控件返回 (0,0) → 位置检查全过 → **每一次点击都被当成按了摇杆**，
+            // 于是随便点一下就开始录一嗓子（真机表现为「整个界面卡死」）。
+            if (!InsideJoy(e.GetPosition(this))) return;
             var p = e.GetPosition(area);
-            if (p.X < 0 || p.Y < 0 || p.X > area.Bounds.Width || p.Y > area.Bounds.Height) return;
+            _joyActive = true; // 只有真正落在摇杆上的这次按下才算摇杆手势
             e.Handled = true;
             // 触摸必须显式捕获：Avalonia 的触摸指针不会因为「谁处理了按下」就自动把后续移动送给谁，
             // 不捕获的话 PointerMoved 一次都收不到（鼠标有隐式捕获，所以桌面/headless 测试永远发现不了）。
@@ -46,11 +55,17 @@ public sealed partial class DesktopWorkspaceView
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(InputElement.PointerMovedEvent, (_, e) =>
         {
-            if (_joyMove is null || _joyArea is not { } area) return;
+            if (!_joyActive || _joyMove is null || _joyArea is not { } area) return;
             _joyMove(e.GetPosition(area).X);
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(InputElement.PointerReleasedEvent, (_, e) =>
         {
+            // 关键：这条处理器挂在视图上、Tunnel + handledEventsToo，会收到**全页每一次**松手。
+            // 原来无条件 Capture(null) 会在 Button 自己收到 PointerReleased 之前就把捕获摘掉，
+            // 于是 Button 立刻 PointerCaptureLost → IsPressed=false → 松手不再触发 Click，
+            // 表现为「整个界面所有按钮都点不动」（真机与 headless 同时复现）。
+            if (!_joyActive) return;
+            _joyActive = false;
             e.Pointer.Capture(null);
             if (_joyRelease is not null) _ = _joyRelease();
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
