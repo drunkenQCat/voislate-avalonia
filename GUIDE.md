@@ -150,10 +150,10 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 4. **Android 进程启动 ANR 预算**：TCG 软件模拟（无 KVM）下任何 .NET Android 应用都超线被杀（已用冒烟应用证实是环境性问题，与代码无关）；真机无此问题。Android 分支的 deferred init 是为该场景保留的保险。
 5. **NETSDK1150**：WinExe 主工程被 Android 工程引用 → 见 §6 csproj 处理。
 6. **Avalonia.Diagnostics 版本滞后**：11.x 与 Avalonia 12.1.1 不配套，暂未引入（csproj 注释说明）。
-7. **已知业务缺口（如实标注，勿当成品）**：
-   - 桌面 UI 点击"导出 JSON/导出全部"会抛 `ArgumentException`（`ExportService.SaveToFileAsync("", …)` 目录为空串，落盘补充从未实现；单测用 Spy 未覆盖 UI 路径）
-   - `scene_schedules` 集合按 Key **字符串**排序（"10A" < "2A"，LiteDbScheduleBook 注释自认缺陷；LiteDbScheduleStore 有序实现存在但未注册）
-   - `ITakeFlowService` 的场/镜标签 Provider 硬编码第 0 场第 0 镜（`book.X(0,0)`）
+7. **已收口的业务缺口（2026-10-26 更新，勿再按旧文档排查）**：
+   - 导出：工作台的「导出 JSON」走 `DesktopWorkspaceBackup.ExportFlutterJson()`，选定日期时走 `ExportDayJson(date)`（Flutter 兼容字段，camelCase、非 ASCII 转义）；老 `ExportService.SaveToFileAsync("")` 那条空目录路径已不参与 UI。
+   - `LiteDbScheduleBook` / `IScheduleBook` / `ITakeFlowService` / `TakeFlowService` **已删除**（`docs/p7-vm-coverage.md` §11），计划读写只剩 `LiteDbScheduleStore`，场记写入只剩 `DesktopWorkspaceService`；`SceneScheduleDoc` 已独立成 `Services/SceneScheduleDoc.cs`。
+   - 仍存疑的只有 `IScheduleStore` 的读取顺序（旧实现按 Key 字符串排，"10A" < "2A"），改计划排序前先写用例钉住期望。
 8. **存储线程安全**：LiteDB 线程安全注意点（ADR-001 风险 CR3）。
 
 ## 8. 页面 / 窗口 / 转换器 / 主题速查
@@ -209,6 +209,19 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 - 实现：API 31+ 走 `VibratorManager.DefaultVibrator`，26..30 走 `Vibrator`，`VibrationEffect.CreateOneShot(duration, amplitude)`。桌面 `Impl` 为 null，调用静默丢弃（原版也是探测 `hasVibrator()` 后置 `_canVibrate=false`）。
 - **不要用 `HasAmplitudeControl` 去「纠正」幅度**：RMX5060 上该探针返回 false，但显式幅度照样被 HAL 采纳（真机日志 `amplitude` 由 `1.0` 变成 `0.50`）。传请求值即可。
 - manifest 必须声明 `android.permission.VIBRATE`（普通权限，装包即授予，无需运行时弹窗）。
+
+#### 语音摇杆（Android）：两个只在真机触摸上暴露的坑
+
+摇杆实现在 `Desktop/DesktopWorkspaceSpeech.cs` 的 `BuildVoice()` + `AttachJoyGestures()`。语义：按住话筒 → 左滑写「录音标注」、右滑写「镜头标注」、回中松手取消；松手后才把识别文本补进对应输入框（内容或镜头被改动则拒写并提示）。三个快捷键等价：`←`/`→` 选栏、`Enter`/`Space` 提交、`Esc` 取消。
+
+1. **摇杆按钮自己挂的处理器收不到触摸**——记录页整页包在 `ScrollViewer` 里（`DesktopWorkspaceView.cs:302`），真机按下时 ScrollViewer 的手势识别器先吃掉 `PointerPressed` 并抢走指针；挂在按钮上的 `AddHandler(..., Tunnel)` 默认 `handledEventsToo: false`，于是一个事件都收不到（**鼠标不触发滚动识别器，所以桌面手测和 headless 用例全绿**）。现在处理器挂在**视图自己**（ScrollViewer 的祖先，任何指针路由必经），`RoutingStrategies.Tunnel, handledEventsToo: true`，并用 `e.GetPosition(_joyArea)` 判断是否落在摇杆矩形内。
+2. **触摸必须显式 `e.Pointer.Capture(area)`**——Avalonia 不会因为「你处理了按下」就自动把后续 `PointerMoved` 送给同一元素（鼠标有隐式捕获，触摸没有）。不捕获的表现是：`[JOY] press` 有日志、`[JOY] move` 一条没有，松手时 `target=<none>` ⇒ 界面像「滑不动」。松手时记得 `e.Pointer.Capture(null)`。
+
+排障：`adb logcat -s VoiSlateTrace`（`Services/Diagnostics.cs` 的静态 Sink，`AndroidApp` 构造里接到 `Android.Util.Log`），正常一次拖动应看到 `[JOY] press …` → `[JOY] move delta=… target=rec` → `[JOY] release target=rec`。
+
+#### 语音采集停止（Android）
+
+`AndroidPcmCapture.Pump()` 的循环条件必须是 `while (!_stopRequested)`：真机实测 **`AudioRecord.Read` 在 `Stop()` 瞬间返回 0（不是负数）**，原先的 `if (read <= 0) continue;` 会让采集线程空转不退，`StopAsync()` 等 3 秒后抛 .NET 英文 `TimeoutException`，被 `Finish()` 的兜底 catch 原样弹成 toast（用户看到的就是那句莫名的 `timeout`）。现在 `read < 0` 视为致命（中文错误）、`read == 0` 睡 5ms 再试、`StopAsync` 超时则就地 `TryComplete()` + `Release()` 收尾，并把 `TimeoutException` 映射成中文提示。
 
 ## 9. 模块地图（Services / ViewModels / Controls / 数据层）
 

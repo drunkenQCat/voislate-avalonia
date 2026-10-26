@@ -61,10 +61,13 @@ internal sealed class AndroidPcmCapture : IPcmCapture
         var buffer = new byte[BytesPerBlock];
         try
         {
-            while (true)
+            while (!_stopRequested)
             {
                 var read = _record?.Read(buffer, 0, buffer.Length) ?? 0;
-                if (read <= 0) continue;
+                if (read < 0) { _audio.Writer.TryComplete(new IOException("麦克风读取失败，请重新标注")); return; }
+                // 真机实测：AudioRecord 在停止瞬间会返回 0（不是负数），原来的 `<= 0 → continue`
+                // 会让采集线程空转不退，StopAsync 等 3 秒后抛英文 TimeoutException 给用户看。
+                if (read == 0) { Thread.Sleep(5); continue; }
                 if (!_audio.Writer.TryWrite(buffer.AsSpan(0, read).ToArray()))
                 {
                     _audio.Writer.TryComplete(new IOException("网络发送过慢，录音缓冲已满，请重试"));
@@ -84,7 +87,15 @@ internal sealed class AndroidPcmCapture : IPcmCapture
             _stopRequested = true;
             try { _record?.Stop(); } catch { /* 已停止或未初始化 */ }
         }
-        await _stopped.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        try { await _stopped.Task.WaitAsync(TimeSpan.FromSeconds(3)); }
+        catch (TimeoutException)
+        {
+            // 采集线程万一卡在 Read 上，就地收尾：把流关掉让识别链路结束，别把 .NET 的英文超时抛给用户。
+            VoiSlate.Services.Diagnostics.Log("[PCM] stop timeout, forcing completion");
+            _audio.Writer.TryComplete();
+            try { _record?.Release(); } catch { /* 已释放 */ }
+            _record = null;
+        }
     }
 
     public async IAsyncEnumerable<byte[]> ReadAsync(
