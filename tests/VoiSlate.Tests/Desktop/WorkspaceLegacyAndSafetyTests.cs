@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using Avalonia.Headless;
 using VoiSlate.Desktop;
 using VoiSlate.Models;
@@ -216,5 +217,23 @@ public sealed partial class DesktopWorkspaceTests
             finally { window.Close(); }
         }
         finally { HardwareKeys.Current = null; }
+    });
+
+    [Fact]
+    public Task Timeline_export_button_follows_the_selected_date() => RunUi(async () =>
+    {
+        using var f = await Create();
+        await f.Workspace.SaveTakeAsync();
+        var window = await WindowFor(f);
+        try
+        {
+            Invoke(Control<Button>(window, "nav-log"));
+            Assert.Equal("导出当日", Control<Button>(window, "export").Content as string);
+
+            var all = window.GetVisualDescendants().OfType<Button>().First(b => (b.Content as string) == "全部日期");
+            Invoke(all);
+            await Until(() => (Control<Button>(window, "export").Content as string) == "导出 JSON");
+        }
+        finally { window.Close(); }
     });
 }

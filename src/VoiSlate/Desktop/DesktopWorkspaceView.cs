@@ -26,6 +26,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private StackPanel _logSummary = null!, _dates = null!, _logFilters = null!, _timeline = null!;
     private ScrollViewer? _planScroll, _logScroll;
     private TextBox? _recNote, _shotNote;
+    private Button? _exportButton;
     private string _page = "record", _planScene = "", _planQuery = "", _logQuery = "";
     private ShotProgress? _planFilter;
     private LogFilter _logFilter;
@@ -392,7 +393,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private Control BuildTimeline()
     {
         var page = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,*,Auto"), Background = Brush("#F4F5F8") };
-        page.Children.Add(PageHeader("02 / TAKE TIMELINE", "场记时间轴", B(_logDate is null ? "导出 JSON" : "导出当日", ExportTimeline, "quiet", "export"), B("返回拍摄 ×", () => Navigate("record"), "quiet")));
+        page.Children.Add(PageHeader("02 / TAKE TIMELINE", "场记时间轴", _exportButton = B(_logDate is null ? "导出 JSON" : "导出当日", ExportTimeline, "quiet", "export"), B("返回拍摄 ×", () => Navigate("record"), "quiet")));
         _logSummary = Stack(8); _logSummary.Margin = new Thickness(24, 15, 24, 0); Grid.SetRow(_logSummary,1); page.Children.Add(_logSummary);
         _dates = Row(7); var dateScroll = new ScrollViewer { Content = _dates, Margin = new Thickness(24, 12, 24, 0), HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
         Grid.SetRow(dateScroll,2); page.Children.Add(dateScroll);
@@ -409,6 +410,13 @@ public sealed partial class DesktopWorkspaceView : UserControl
     }
     private void RenderTimelineContents()
     {
+        if (_exportButton is not null)
+        {
+            // 只重绘内容时表头不重建，导出按钮的标签必须跟着 _logDate 一起更新，否则「导出当日/导出 JSON」会骗人
+            var label = _logDate is null ? "导出 JSON" : "导出当日";
+            _exportButton.Content = label;
+            Avalonia.Automation.AutomationProperties.SetName(_exportButton, label);
+        }
         _logSummary.Children.Clear(); _dates.Children.Clear(); _logFilters.Children.Clear(); _timeline.Children.Clear();
         var all = _service.Logs.Where(l => (_logDate is null || l.Date == _logDate) && (_scopeScene is null || _service.MatchesShot(l, _scopeScene, _scopeShot ?? ""))).ToList();
         var stats = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*") };
