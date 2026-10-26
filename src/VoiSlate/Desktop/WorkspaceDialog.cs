@@ -54,14 +54,27 @@ public abstract class WorkspaceDialog
                 VerticalAlignment = VerticalAlignment.Center,
             };
             var content = new StackPanel { Spacing = 16 };
-            content.Children.Add(new TextBlock
+            // 触屏没有窗口 X，标题行自带一个 ✕；点遮罩空白同样关闭（语义与桌面点 X 一致：返回 default）
+            var titleRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            titleRow.Children.Add(new TextBlock
             {
                 Text = title,
                 FontSize = 20,
                 FontWeight = Avalonia.Media.FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(Color.Parse("#35523D")),
                 TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center,
             });
+            var shut = new Button
+            {
+                Content = "✕", FontSize = 15, Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+                Padding = new Thickness(10, 2, 2, 2), Foreground = new SolidColorBrush(Color.Parse("#6B7F70")),
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+                MinWidth = 44, MinHeight = 44, // 触屏最小命中区
+            };
+            shut.Click += (_, _) => Finish(null);
+            Grid.SetColumn(shut, 1); titleRow.Children.Add(shut);
+            content.Children.Add(titleRow);
             content.Children.Add(body);
             card.Child = new ScrollViewer
             {
@@ -70,7 +83,7 @@ public abstract class WorkspaceDialog
                 HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
             };
             var scrim = new Border { Background = new SolidColorBrush(Color.Parse("#73101618")) };
-            scrim.PointerPressed += (_, e) => { e.Handled = true; };
+            scrim.PointerPressed += (_, _) => Finish(null); // 点遮罩空白 = 关闭（卡片自己在遮罩之上，内部点击不会落到这里）
             _layer = new Grid();
             _layer.Children.Add(scrim);
             _layer.Children.Add(card);
