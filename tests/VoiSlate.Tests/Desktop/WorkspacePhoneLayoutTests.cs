@@ -71,6 +71,18 @@ public sealed partial class DesktopWorkspaceTests
             Invoke(Control<Button>(window, "navb-settings"));
             var dialog = Assert.Single(window.OwnedWindows);
             Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text?.Contains("工程名称") == true);
+
+            // 4) 弹窗内部同样不许溢出（横向 StackPanel 按钮排在 390 宽下会把最后一个按钮挤到窗口外）
+            Dispatcher.UIThread.RunJobs();
+            var spill = new List<string>();
+            foreach (var c in dialog.GetVisualDescendants().OfType<Control>())
+            {
+                if (!c.IsVisible || c.Bounds.Width <= 0 || c.Bounds.Height <= 0) continue;
+                if (c is ScrollBar || c.FindAncestorOfType<ScrollBar>() is not null) continue;
+                var rect = InWindow(c, dialog);
+                if (rect.Right > dialog.ClientSize.Width + 1 || rect.Left < -1) spill.Add($"dialog: {Chain(c)} rect={rect}");
+            }
+            Assert.True(spill.Count == 0, $"dialog client={dialog.ClientSize}\n" + string.Join("\n", spill.Take(10)));
             dialog.Close();
         }
         finally { window.Close(); }

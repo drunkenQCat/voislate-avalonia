@@ -48,6 +48,12 @@ public sealed partial class DesktopWorkspaceView
         {
             if (!_voiceCaptureAvailable) { preview.Text = "语音标注需要本机麦克风采集，本平台暂未接入"; return; }
             if (active || processing || _busy || _service.Draft.Ended || _service.Shot is null) return;
+            if (PcmCapture.PermissionRequest is { } ask && !await ask())
+            {
+                preview.Text = "需要麦克风权限才能语音标注，请在系统设置里允许 VoiSlate 录音";
+                Toast(preview.Text, true);
+                return;
+            }
             active = true; var current = ++generation;
             beforeRec = _recNote?.Text ?? ""; beforeShot = _shotNote?.Text ?? "";
             scene = _service.State.Scene; shot = _service.State.Shot;
@@ -134,7 +140,7 @@ public sealed partial class DesktopWorkspaceView
         BailianOptions? loaded = null;
         try
         {
-            var devices = WindowsPcmCapture.Devices(); microphones.ItemsSource = devices;
+            var devices = PcmCapture.Devices(); microphones.ItemsSource = devices;
             loaded = _speechSettings.LoadAsync().GetAwaiter().GetResult();
             workspace.Text = loaded.WorkspaceId;
             microphones.SelectedIndex = loaded.DeviceNumber < devices.Count ? loaded.DeviceNumber : devices.Count > 0 ? 0 : -1;
@@ -168,8 +174,45 @@ public sealed partial class DesktopWorkspaceView
             try { await _speechSettings.ClearTokenAsync(); token.Text = ""; status.Text = "Token 已移除。"; }
             catch (Exception ex) { status.Text = ex.Message; }
         }, "quiet");
+        var meter = B("测试麦克风", async () =>
+        {
+            try
+            {
+                if (PcmCapture.PermissionRequest is { } ask && !await ask()) { status.Text = "没有麦克风权限，无法采集。"; return; }
+                using var capture = PcmCapture.Create(Math.Max(0, microphones.SelectedIndex));
+                capture.Start();
+                status.Text = "正在采集 2 秒…";
+                var peak = 0; var blocks = 0;
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                try
+                {
+                    await foreach (var block in capture.ReadAsync(cts.Token))
+                    {
+                        blocks++;
+                        for (var i = 0; i + 1 < block.Length; i += 2)
+                        {
+                            var sample = Math.Abs((short)(block[i] | (block[i + 1] << 8)));
+                            if (sample > peak) peak = sample;
+                        }
+                    }
+                }
+                catch (OperationCanceledException) { /* 2 秒到点 */ }
+                try { await capture.StopAsync(); } catch { /* 已停止 */ }
+                status.Text = blocks == 0
+                    ? "没有收到音频帧：麦克风可能被其它应用占用"
+                    : $"麦克风正常：收到 {blocks} 帧，峰值 {peak * 100 / 32768}%";
+            }
+            catch (Exception ex) { status.Text = ex.Message; }
+        });
+        // 横向 StackPanel 在 361dp 手机上会把「移除 Token」挤出卡片，改成自动换行
+        var buttons = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var button in new Control[] { save, test, meter, clear })
+        {
+            button.Margin = new Thickness(0, 0, 6, 6);
+            buttons.Children.Add(button);
+        }
         return Stack(10, T("百炼语音识别", 16, "#45654D", true),
             T("北京地域 · 实时识别；按住话筒时上传音频。Token 仅供本机当前 Windows 用户使用，不包含在 JSON 导出中。", 11),
-            T("Token（API Key）"), token, T("业务空间（可选）"), workspace, T("麦克风"), microphones, status, Row(6, save, test, clear));
+            T("Token（API Key）"), token, T("业务空间（可选）"), workspace, T("麦克风"), microphones, status, buttons);
     }
 }

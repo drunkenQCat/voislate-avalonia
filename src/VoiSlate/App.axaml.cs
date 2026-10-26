@@ -101,7 +101,10 @@ public partial class App : Application
             // 内容 = 与桌面同一套工作台界面（DesktopWorkspaceView），窄屏时它自己切成底部 Tab。
             var workspace = CreateWorkspace(_services);
             var speechSettings = CreateSpeechSettings(_services);
-            var view = new Desktop.DesktopWorkspaceView(workspace, speechSettings, captureFactory: null);
+            var view = new Desktop.DesktopWorkspaceView(workspace, speechSettings,
+                // 采集器由平台工程注入（Android 在 MainActivity.OnCreate 里注册 AudioRecord 实现）；
+                // 用惰性 lambda 而不是取当下的 PcmCapture.Factory 值，避免注册时机早/晚造成的空引用。
+                captureFactory: deviceNumber => Desktop.Speech.PcmCapture.Create(deviceNumber));
             androidLifetime.MainViewFactory = () => view;
             // 初始化（读库 + 迁移 + 首次 seed）放到后台，完成后再让视图重画一次：
             // 进程启动 ANR 预算内不能同步做 IO，但空白壳先出、数据后到对用户是可接受的。

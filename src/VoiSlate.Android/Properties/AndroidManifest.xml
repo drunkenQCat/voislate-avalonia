@@ -1,3 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 录音：语音标注走 AudioRecord 采集 16kHz PCM -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 网络：百炼实时识别是 WSS 长连接（Release 包不会自动补 INTERNET） -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application android:label="VoiSlate" android:icon="@mipmap/appicon" android:allowBackup="true" android:supportsRtl="true" />
 </manifest>
