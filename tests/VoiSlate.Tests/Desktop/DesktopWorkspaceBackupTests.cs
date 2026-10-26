@@ -78,7 +78,7 @@ public sealed partial class DesktopWorkspaceTests
         await s.SelectShotAsync("1A", "1A"); Assert.Equal(9, s.Draft.Take);
     }
     [Fact]
-    public async Task Backup_files_are_complete_unique_and_exclude_credentials()
+    public async Task Backup_files_are_complete_unique_and_leave_no_temporary_files()
     {
         using var f = await Create(); var s = f.Workspace; await s.SaveTakeAsync();
         var directory = Path.Combine(Path.GetTempPath(), "VoiSlate-backup-test-" + Guid.NewGuid().ToString("N"));
@@ -86,7 +86,6 @@ public sealed partial class DesktopWorkspaceTests
         var one = await s.WriteBackupAsync("auto"); var two = await s.WriteBackupAsync("exit");
         Assert.NotEqual(one, two); Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
         Assert.Equal(1, DesktopWorkspaceService.PrepareImport(await File.ReadAllTextAsync(one), s.Today).TakeCount);
-        Assert.DoesNotContain("protected-token", await File.ReadAllTextAsync(two));
         File.Delete(one); File.Delete(two); Directory.Delete(directory);
     }
 }

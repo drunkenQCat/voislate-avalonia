@@ -156,13 +156,4 @@ public sealed partial class DesktopWorkspaceTests
         using var export=JsonDocument.Parse(reloaded.ExportJson());Assert.Equal("测试工程",export.RootElement.GetProperty("project").GetString());
         Assert.Equal(2,export.RootElement.GetProperty("plan").GetArrayLength());Assert.Equal("261024",export.RootElement.GetProperty("days")[0].GetProperty("date").GetString());
     }
-    [Fact]
-    public async Task Renaming_current_plan_keeps_current_draft_and_duplicate_edits_are_rejected()
-    {
-        using var f=await Create();var s=f.Workspace;
-        await s.SaveDraftAsync("保留草稿","镜头标注");await s.SavePlanItemAsync("1A","1A","12A","场地","概要","Boom",true);
-        Assert.Equal("12A",s.State.Scene);Assert.Equal("保留草稿",s.Draft.RecordingNote);
-        await Assert.ThrowsAsync<DuplicateItemException>(()=>s.SavePlanItemAsync("12A","1A","2B","近景","重复","",false));
-        Assert.Equal("1A",s.State.Shot);Assert.Equal("保留草稿",s.Draft.RecordingNote);
-    }
 }

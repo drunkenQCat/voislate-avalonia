@@ -1,6 +1,4 @@
-using System.Text.Json;
 using VoiSlate.Desktop;
-using VoiSlate.Desktop.Speech;
 using VoiSlate.Models;
 using VoiSlate.Services;
 using Xunit;
@@ -16,9 +14,14 @@ public sealed partial class DesktopWorkspaceTests
         await s.SaveTakeAsync(); var id = s.Logs[0].Item.ShotId;
         await s.SaveDraftAsync("留在此镜", "");
         await s.SavePlanItemAsync("1A", "1A", "12A", "新场地", "概要", "", true);
+        Assert.Equal("12A", s.State.Scene);
         await s.SavePlanItemAsync("12A", "1A", "8B", "近景", "改号", "", false);
         Assert.Equal("留在此镜", s.Draft.RecordingNote); Assert.Equal(id, s.Shot!.StableId);
         Assert.Single(s.QueryLogs(scene: "12A", shot: "8B")); Assert.Equal("8B", s.FindPlan(s.Logs[0])!.Value.Shot.Name);
+        // A duplicate rename must leave the selected shot and its draft intact.
+        await Assert.ThrowsAsync<DuplicateItemException>(() => s.SavePlanItemAsync("12A", "8B", "2B", "", "", "", false));
+        Assert.Equal("8B", s.State.Shot); Assert.Equal(id, s.Shot!.StableId);
+        Assert.Equal("留在此镜", s.Draft.RecordingNote);
         await s.DeletePlanItemAsync("12A", "8B");
         await s.SavePlanItemAsync("12A", null, "8B", "近景", "新镜头", "", false);
         Assert.Empty(s.QueryLogs(scene: "12A", shot: "8B"));
@@ -96,14 +99,13 @@ public sealed partial class DesktopWorkspaceTests
         var restarted = f.NewWorkspace(); await restarted.InitializeAsync(); var item = restarted.Logs[0].Item;
         Assert.Equal(50, item.FilenameNum); Assert.Equal(7, item.Tk); Assert.Equal("新场信息", item.ScnNote); Assert.Equal(new[] { "Boom", "X" }, item.Tracks); Assert.Equal(51, restarted.State.FileNumber);
     }
-    [WindowsOnlyFact]
-    public async Task Legacy_track_tags_are_migrated_and_token_is_excluded_from_workspace_export()
+    [Fact]
+    public async Task Legacy_track_tags_are_migrated_and_linked_to_the_plan()
     {
         using var f = await Create();
         await f.Logs.AddAsync("261023", "261023-T001", new() { Scn = "1A", Sht = "1A", Tk = 1, FilenamePrefix = "261023", FilenameNum = 1, ShtNote = "正文<Boom/><演员甲/>" });
-        var speech = new BailianSettingsStore(new LiteDbSessionSettingsStore(f.Db), new WindowsTokenProtector()); await speech.SaveAsync("sk-private-secret", "", 0);
         var s = f.NewWorkspace(); await s.InitializeAsync();
         var item = Assert.Single(s.Logs).Item; Assert.Equal("正文", item.ShtNote); Assert.Equal(new[] { "Boom", "演员甲" }, item.Tracks);
-        Assert.NotNull(item.ShotId); Assert.DoesNotContain("sk-private-secret", s.ExportJson()); Assert.DoesNotContain("bailian", s.ExportJson(), StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(item.ShotId);
     }
 }

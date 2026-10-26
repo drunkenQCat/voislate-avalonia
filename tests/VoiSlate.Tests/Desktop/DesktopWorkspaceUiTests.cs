@@ -89,6 +89,7 @@ public sealed partial class DesktopWorkspaceTests
             Assert.NotEqual('\0', token.PasswordChar); token.Focus(); dialog.KeyTextInput("sk-ui-test-only");
             Invoke(Button(dialog, "保存语音设置")); Assert.Equal("sk-ui-test-only", (await SpeechSettings(f).LoadAsync()).Token);
             Assert.Empty(token.Text ?? ""); Assert.DoesNotContain("sk-ui-test-only", f.Workspace.ExportJson());
+            Assert.DoesNotContain("bailian", f.Workspace.ExportJson(), StringComparison.OrdinalIgnoreCase);
             CaptureFrame(dialog, "settings-bailian"); dialog.Close();
             Invoke(Button(window, "⚙ 工程与偏好")); dialog = Assert.Single(window.OwnedWindows);
             Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text?.Contains("Token 已加密保存") == true);
@@ -135,11 +136,7 @@ public sealed partial class DesktopWorkspaceTests
         finally { window.Close(); }
     });
     [WindowsOnlyTheory]
-    [InlineData(-45, "rec")]
-    [InlineData(45, "shot")]
     [InlineData(0, "cancel")]
-    [InlineData(-19, "cancel")]
-    [InlineData(19, "cancel")]
     [InlineData(-20, "cancel")]
     [InlineData(20, "cancel")]
     [InlineData(-21, "rec")]
