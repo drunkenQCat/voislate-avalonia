@@ -167,7 +167,8 @@ public sealed partial class DesktopWorkspaceView : UserControl
         {
         _finishVoice?.Invoke(); _hold.Stop(); _holding = false;
         // 每次重建都把摇杆手势目标清空：只有记录页会重新装填，其它页绝不能再拿上一页的旧控件做命中判定。
-        _joyArea = null; _joyPress = null; _joyMove = null; _joyRelease = null; _joyActive = false;
+        _joyArea = null; _joyKnob = null; _joyPress = null; _joyMove = null; _joyRelease = null; _joyActive = false;
+        var pointer = _joyPointer; _joyPointer = null; pointer?.Capture(null);
         _root = new Grid(); _shell = new Grid { ColumnDefinitions = new ColumnDefinitions(_compact ? "0,*" : "184,*") };
         _rail = Box(BuildRail(), "#173F49", 18, radius: 0); _rail.IsVisible = !_compact;
         _host = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };

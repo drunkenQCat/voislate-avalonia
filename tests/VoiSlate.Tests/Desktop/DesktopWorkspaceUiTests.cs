@@ -97,7 +97,7 @@ public sealed partial class DesktopWorkspaceTests
         finally { window.Close(); }
     });
     [WindowsOnlyFact]
-    public Task Ui_voice_previews_then_appends_final_once_to_selected_annotation() => RunUi(async () =>
+    public Task Ui_voice_previews_then_replaces_final_once_in_selected_annotation() => RunUi(async () =>
     {
         using var f = await Create(); await SpeechSettings(f).SaveAsync("sk-ui-test-only", "", 0);
         await f.Workspace.SaveDraftAsync("已有录音", "已有镜头"); var transport = new UiTransport(); var capture = new UiCapture();
@@ -110,10 +110,10 @@ public sealed partial class DesktopWorkspaceTests
             Assert.True(Control<Button>(window, "voice-joystick").IsFocused);
             Key(window, Avalonia.Input.Key.Enter, PhysicalKey.Enter);
             Assert.True(capture.Stopped, string.Join(" | ", window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)));
-            await Until(() => Control<TextBox>(window, "recording-note").Text == "已有录音；最终转写。");
-            await Until(() => Control<TextBlock>(window, "voice-preview").Text == "已追加到录音标注");
-            Assert.Equal("已有镜头", Control<TextBox>(window, "shot-note").Text); Assert.Equal("已有录音；最终转写。", f.Workspace.Draft.RecordingNote);
-            Key(window, Avalonia.Input.Key.Enter, PhysicalKey.Enter); Assert.Equal("已有录音；最终转写。", f.Workspace.Draft.RecordingNote); Assert.True(capture.Disposed);
+            await Until(() => Control<TextBox>(window, "recording-note").Text == "最终转写。");
+            await Until(() => Control<TextBlock>(window, "voice-preview").Text == "已写入录音标注");
+            Assert.Equal("已有镜头", Control<TextBox>(window, "shot-note").Text); Assert.Equal("最终转写。", f.Workspace.Draft.RecordingNote);
+            Key(window, Avalonia.Input.Key.Enter, PhysicalKey.Enter); Assert.Equal("最终转写。", f.Workspace.Draft.RecordingNote); Assert.True(capture.Disposed);
             CaptureFrame(window, "record-bailian");
         }
         finally { window.Close(); }
@@ -138,6 +138,12 @@ public sealed partial class DesktopWorkspaceTests
     [InlineData(-45, "rec")]
     [InlineData(45, "shot")]
     [InlineData(0, "cancel")]
+    [InlineData(-19, "cancel")]
+    [InlineData(19, "cancel")]
+    [InlineData(-20, "cancel")]
+    [InlineData(20, "cancel")]
+    [InlineData(-21, "rec")]
+    [InlineData(21, "shot")]
     public Task Ui_pointer_drag_commits_to_selected_side_and_center_release_cancels(int delta, string side) => RunUi(async () =>
     {
         using var f = await Create(); await SpeechSettings(f).SaveAsync("sk-ui-test-only", "", 0);
@@ -151,8 +157,8 @@ public sealed partial class DesktopWorkspaceTests
             await Until(() => window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "中间预览"));
             var end = origin + new Vector(delta, 0); window.MouseMove(end, RawInputModifiers.LeftMouseButton); window.MouseUp(end, MouseButton.Left);
             await Until(() => capture.Disposed);
-            Assert.Equal(side == "rec" ? "原录音；最终转写。" : "原录音", f.Workspace.Draft.RecordingNote);
-            Assert.Equal(side == "shot" ? "原镜头；最终转写。" : "原镜头", f.Workspace.Draft.ShotNote);
+            Assert.Equal(side == "rec" ? "最终转写。" : "原录音", f.Workspace.Draft.RecordingNote);
+            Assert.Equal(side == "shot" ? "最终转写。" : "原镜头", f.Workspace.Draft.ShotNote);
         }
         finally { window.Close(); }
     });

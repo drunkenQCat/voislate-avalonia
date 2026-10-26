@@ -16,6 +16,8 @@ public sealed partial class DesktopWorkspaceView
     private readonly Func<int, IPcmCapture> _captureFactory;
     private bool _joyGesturesAttached;
     private Control? _joyArea;
+    private Control? _joyKnob;
+    private IPointer? _joyPointer;
 
     /// <summary>摇杆手势目标是否已装填（只有记录页为真；测试用来钉住「切页后不能拿旧控件做命中判定」）。</summary>
     internal bool VoiceGestureArmed => _joyArea is not null;
@@ -38,6 +40,7 @@ public sealed partial class DesktopWorkspaceView
         AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
             if (_joyPress is null || _joyArea is not { } area) return;
+            if (_joyActive || _joyKnob is not { } handle) return;
             if (e.Pointer.Type == PointerType.Mouse && !e.GetCurrentPoint(area).Properties.IsLeftButtonPressed) return;
             // 命中判定必须用「相对视图」的坐标 + TranslatePoint：
             // 切到计划页/时间轴后 _joyArea 可能还指向上一页那个已经脱离可视树的摇杆，
@@ -45,8 +48,11 @@ public sealed partial class DesktopWorkspaceView
             // 对不在树上的控件返回 (0,0) → 位置检查全过 → **每一次点击都被当成按了摇杆**，
             // 于是随便点一下就开始录一嗓子（真机表现为「整个界面卡死」）。
             if (!InsideJoy(e.GetPosition(this))) return;
+            var hit = e.GetPosition(handle);
+            if (!new Rect(handle.Bounds.Size).Contains(hit)) return;
             var p = e.GetPosition(area);
             _joyActive = true; // 只有真正落在摇杆上的这次按下才算摇杆手势
+            _joyPointer = e.Pointer;
             e.Handled = true;
             // 触摸必须显式捕获：Avalonia 的触摸指针不会因为「谁处理了按下」就自动把后续移动送给谁，
             // 不捕获的话 PointerMoved 一次都收不到（鼠标有隐式捕获，所以桌面/headless 测试永远发现不了）。
@@ -55,7 +61,7 @@ public sealed partial class DesktopWorkspaceView
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(InputElement.PointerMovedEvent, (_, e) =>
         {
-            if (!_joyActive || _joyMove is null || _joyArea is not { } area) return;
+            if (!_joyActive || e.Pointer != _joyPointer || _joyMove is null || _joyArea is not { } area) return;
             _joyMove(e.GetPosition(area).X);
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(InputElement.PointerReleasedEvent, (_, e) =>
@@ -64,8 +70,11 @@ public sealed partial class DesktopWorkspaceView
             // 原来无条件 Capture(null) 会在 Button 自己收到 PointerReleased 之前就把捕获摘掉，
             // 于是 Button 立刻 PointerCaptureLost → IsPressed=false → 松手不再触发 Click，
             // 表现为「整个界面所有按钮都点不动」（真机与 headless 同时复现）。
-            if (!_joyActive) return;
+            if (!_joyActive || e.Pointer != _joyPointer) return;
+            if (e.Pointer.Type == PointerType.Mouse && e.InitialPressMouseButton != MouseButton.Left) return;
+            if (_joyArea is { } area) _joyMove?.Invoke(e.GetPosition(area).X);
             _joyActive = false;
+            _joyPointer = null;
             e.Pointer.Capture(null);
             if (_joyRelease is not null) _ = _joyRelease();
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -76,74 +85,72 @@ public sealed partial class DesktopWorkspaceView
             ? "按住话筒，左滑录音标注 / 右滑镜头标注，松手提交"
             : "语音标注需要本机麦克风采集，本平台暂未接入；可直接在下面两个输入框手动记录", 11, "#83919C");
         AutomationProperties.SetAutomationId(preview, "voice-preview");
-        var joy = Box(new Grid(), "#EAEFF0", 8, "#DFE6E7", 40); joy.Height = 76;
+        // Flutter call site: 120 x 70, scaled to 80%; 50 units of travel.
+        const double halfTravel = 25;
+        var joy = Box(new Grid(), "#EF9A9A", 5, radius: 70);
+        joy.Width = 120; joy.Height = 70;
         var track = (Grid)joy.Child!;
-        var hints = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*") };
-        var leftHint = T("≪ 录音", 10, "#8C9AA3"); var rightHint = T("镜头 ≫", 10, "#8C9AA3");
-        hints.Children.Add(leftHint);
-        rightHint.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(rightHint, 1); hints.Children.Add(rightHint); track.Children.Add(hints);
-        // 红→绿填充条：照抄 Flutter 原版 sliderBackground 的视觉契约——从左边长出、随手指位置由红渐变到绿，
-        // 提醒「左边写录音标注、右边写镜头标注」。原版靠 isVisible 取反控制（按下即隐藏），这里改成拖动时才显示。
-        var fill = new Border
-        {
-            HorizontalAlignment = HorizontalAlignment.Left,
-            CornerRadius = new CornerRadius(8),
-            IsHitTestVisible = false,
-            Width = 0,
-            Background = Brush("#EF9A9A")
-        };
-        track.Children.Add(fill);
+        var arrows = T("▸  ◂", 28, "#A5D6A7");
+        arrows.HorizontalAlignment = HorizontalAlignment.Center;
+        arrows.VerticalAlignment = VerticalAlignment.Center;
+        arrows.IsHitTestVisible = false; track.Children.Add(arrows);
         var knob = B("开始语音标注", () => { }, "purple", "voice-joystick");
         Control Mic() => new PathIcon { Data = Geometry.Parse("M12,14C13.66,14 15,12.66 15,11V5C15,3.34 13.66,2 12,2C10.34,2 9,3.34 9,5V11C9,12.66 10.34,14 12,14 M18,11C18,14.53 15.06,17.44 11.53,17.5C8.08,17.56 5,14.93 5,11H3.13C3.13,14.66 6.31,17.66 10,17.9V21H14V17.9C17.69,17.66 20.87,14.66 20.87,11H18"), Width = 25, Height = 25, Foreground = Brushes.White };
-        knob.Content = Mic(); knob.Width = 58; knob.Height = 58; knob.CornerRadius = new CornerRadius(29);
-        knob.HorizontalAlignment = HorizontalAlignment.Center; knob.Padding = new Thickness(0); knob.Background = Brush("#C6A4D4"); track.Children.Add(knob);
-        // 只降透明度、不禁用：禁用按钮拿不到焦点/手势，会让「按了给你一句解释」这条降级路径也走不通。
+        knob.Content = Mic(); knob.Width = 60; knob.Height = 60; knob.CornerRadius = new CornerRadius(30);
+        knob.HorizontalAlignment = HorizontalAlignment.Center; knob.VerticalAlignment = VerticalAlignment.Center;
+        knob.Padding = new Thickness(0); knob.Background = Brush("#F3E5F5"); track.Children.Add(knob);
+        // Fluent Button transitions must not interpolate a pointer-driven transform.
+        knob.Transitions = new Avalonia.Animation.Transitions();
         if (!_voiceCaptureAvailable) knob.Opacity = 0.45;
         BailianMicrophoneSession? session = null;
         bool active = false, processing = false; int generation = 0; double start = 0; string? target = null;
         string beforeRec = "", beforeShot = "", scene = "", shot = "";
         var limit = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
-        // 两色线性插值（原版 calculateBackground 用 Color.alphaBlend 混红绿，这里直接插值更直观）。
-        static IBrush Mix(string from, string to, double t)
+        DispatcherTimer? spring = null;
+        void StopSpring() { spring?.Stop(); spring = null; }
+        void Paint(double delta)
         {
-            var a = Color.Parse(from); var b = Color.Parse(to);
-            t = Math.Clamp(t, 0, 1);
-            byte L(byte x, byte y) => (byte)Math.Round(x + (y - x) * t);
-            return new SolidColorBrush(Color.FromRgb(L(a.R, b.R), L(a.G, b.G), L(a.B, b.B)));
+            knob.RenderTransform = new TranslateTransform(Math.Clamp(delta, -halfTravel, halfTravel), 0);
+            var progress = Math.Clamp((delta + halfTravel) / (halfTravel * 2), 0, 1);
+            var red = Color.Parse("#EF9A9A"); var green = Color.Parse("#A5D6A7");
+            byte Blend(byte a, byte b) => (byte)Math.Round(a + (b - a) * progress);
+            joy.Background = Math.Abs(delta) < 0.001 ? Brushes.Transparent
+                : new SolidColorBrush(Color.FromRgb(Blend(red.R, green.R), Blend(red.G, green.G), Blend(red.B, green.B)));
         }
-
         void Reset()
         {
-            var from = (knob.RenderTransform as TranslateTransform)?.X ?? 0;
+            var from = knob.RenderTransform?.Value.M31 ?? 0;
             active = processing = false; limit.Stop(); knob.Content = Mic();
-            knob.Background = Brush("#C6A4D4"); knob.Opacity = _voiceCaptureAvailable ? 1 : 0.45;
-            leftHint.Foreground = Brush("#8C9AA3"); rightHint.Foreground = Brush("#8C9AA3");
-            fill.Width = 0; fill.Background = Brush("#EF9A9A");
+            knob.Background = Brush("#F3E5F5"); knob.Opacity = _voiceCaptureAvailable ? 1 : 0.45;
             SpringBack(from);
         }
         // 松手回弹：沿用 Flutter 原版 AnimatedPositioned 的 200ms + Curves.easeInExpo（起步慢、收尾快）。
         // 用逐帧 DispatcherTimer 而不是 Transitions，是为了拖动期间零延迟（挂了过渡滑块会追不上手指）。
         void SpringBack(double from)
         {
-            if (Math.Abs(from) < 0.5) { knob.RenderTransform = null; return; }
+            StopSpring();
+            if (Math.Abs(from) < 0.5) { Paint(0); return; }
             const int durationMs = 200, frameMs = 16;
             var elapsed = 0;
             var ticker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(frameMs) };
+            spring = ticker;
             ticker.Tick += (_, _) =>
             {
                 elapsed += frameMs;
                 var t = Math.Min(1d, elapsed / (double)durationMs);
                 var eased = t <= 0 ? 0 : Math.Pow(2, 10 * (t - 1)); // Curves.easeInExpo
-                knob.RenderTransform = new TranslateTransform(from * (1 - eased), 0);
+                Paint(from * (1 - eased));
                 if (t < 1) return;
-                ticker.Stop(); knob.RenderTransform = null;
+                ticker.Stop(); spring = null; Paint(0);
             };
             ticker.Start();
         }
         void Cancel()
         {
             if (!active && !processing && session is null) return;
-            generation++; Reset(); var old = session; session = null;
+            generation++;
+            _joyActive = false; var pointer = _joyPointer; _joyPointer = null; pointer?.Capture(null);
+            Reset(); var old = session; session = null;
             if (old is not null) { old.Cancel(); _ = old.DisposeAsync(); }
             preview.Text = "已取消；按住话筒重新标注";
         }
@@ -153,22 +160,28 @@ public sealed partial class DesktopWorkspaceView
             Services.Diagnostics.Log($"[JOY] begin busy={_busy} avail={_voiceCaptureAvailable}");
             if (!_voiceCaptureAvailable) { preview.Text = "语音标注需要本机麦克风采集，本平台暂未接入"; return; }
             if (active || processing || _busy || _service.Draft.Ended || _service.Shot is null) return;
+            StopSpring(); Paint(0);
+            active = true; var current = ++generation;
             if (!_micPermissionGranted && PcmCapture.PermissionRequest is { } ask)
             {
                 try { _micPermissionGranted = await ask(); }
                 catch (Exception ex)
                 {
+                    if (current != generation) return;
+                    Cancel();
                     Services.Diagnostics.Log($"[VOICE] permission {ex.GetType().Name}: {ex.Message}");
                     preview.Text = "等待麦克风授权超时，请重试"; Toast(preview.Text, true); return;
                 }
+                if (current != generation) return;
                 if (!_micPermissionGranted)
                 {
+                    Cancel();
                     preview.Text = "需要麦克风权限才能语音标注，请在系统设置里允许 VoiSlate 录音";
                     Toast(preview.Text, true);
                     return;
                 }
             }
-            active = true; var current = ++generation;
+            if (current != generation) return;
             beforeRec = _recNote?.Text ?? ""; beforeShot = _shotNote?.Text ?? "";
             scene = _service.State.Scene; shot = _service.State.Shot;
             preview.Text = "正在连接百炼…"; knob.Content = "■";
@@ -193,7 +206,7 @@ public sealed partial class DesktopWorkspaceView
         {
             if (!active) return;
             if (target is null || session is null) { Cancel(); return; }
-            active = false; processing = true; limit.Stop(); knob.RenderTransform = null; knob.Content = "…";
+            active = false; processing = true; limit.Stop(); knob.Content = "…";
             var current = generation; var completing = session; var side = target;
             preview.Text = "正在整理识别结果…";
             try
@@ -205,8 +218,8 @@ public sealed partial class DesktopWorkspaceView
                 if (_service.State.Scene != scene || _service.State.Shot != shot || box is null || (box.Text ?? "") != previous)
                     throw new InvalidOperationException("标注内容或镜头已变化，本次转写未写入，请重新标注");
                 if (text.Length == 0) { preview.Text = "未识别到语音，请重试"; return; }
-                box.Text = previous + (previous.Length > 0 ? "；" : "") + text;
-                preview.Text = "已追加到" + (side == "rec" ? "录音标注" : "镜头标注"); Toast(preview.Text);
+                box.Text = text;
+                preview.Text = "已写入" + (side == "rec" ? "录音标注" : "镜头标注"); Toast(preview.Text);
             }
             catch (TimeoutException) { if (current == generation) { preview.Text = "录音停止超时，本次标注已放弃，请重试"; Toast(preview.Text, true); } }
             catch (Exception ex) { Services.Diagnostics.Log($"[VOICE] finish {ex.GetType().Name}: {ex.Message}"); if (current == generation) { preview.Text = ex.Message; Toast(ex.Message, true); } }
@@ -214,7 +227,9 @@ public sealed partial class DesktopWorkspaceView
         }
         limit.Tick += async (_, _) => await Finish();
         AttachJoyGestures();
-        _joyArea = joy;
+        _joyArea = joy; _joyKnob = knob;
+        joy.PointerCaptureLost += (_, _) => { if (_joyActive) Cancel(); };
+        joy.DetachedFromVisualTree += (_, _) => { Cancel(); StopSpring(); limit.Stop(); };
         _joyPress = async x =>
         {
             Services.Diagnostics.Log($"[JOY] press x={x:F1} active={active} processing={processing} ended={_service.Draft.Ended}");
@@ -225,17 +240,9 @@ public sealed partial class DesktopWorkspaceView
         _joyMove = x =>
         {
             if (!active) return;
-            var delta = Math.Clamp(x - start, -55, 55);
-            knob.RenderTransform = new TranslateTransform(delta, 0);
-            // 填充条：宽度 = 从左边到滑块中心，颜色按行程 0(红 #EF9A9A) → 1(绿 #A5D6A7) 线性插值。
-            var progress = (delta + 55) / 110d;
-            fill.Width = Math.Max(0, 55 + delta);
-            fill.Background = Mix("#EF9A9A", "#A5D6A7", progress);
-            var next = delta < -24 ? "rec" : delta > 24 ? "shot" : null;
-            // 锁定即变色：手指还在屏幕上就能看到松手会写进哪一栏。
-            leftHint.Foreground = Brush(next == "rec" ? "#1F6F86" : "#8C9AA3");
-            rightHint.Foreground = Brush(next == "shot" ? "#3F6B3F" : "#8C9AA3");
-            knob.Background = Brush(next == "rec" ? "#1F6F86" : next == "shot" ? "#3F6B3F" : "#C6A4D4");
+            var delta = x - start;
+            Paint(delta);
+            var next = delta < -halfTravel ? "rec" : delta > halfTravel ? "shot" : null;
             if (next == target) return;
             target = next;
             preview.Text = next is null ? "回中松手取消 · 左滑录音 / 右滑镜头" : "松手写入" + (next == "rec" ? "录音标注" : "镜头标注");
@@ -261,7 +268,9 @@ public sealed partial class DesktopWorkspaceView
             else if (e.Key == Key.Escape && (active || processing)) { e.Handled = true; Cancel(); }
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         ToolTip.SetTip(knob, "按住并左右滑动选择标注，松手提交；键盘左右键开始，Enter 提交，Esc 取消");
-        return Stack(6, joy, preview);
+        preview.MaxWidth = 200; preview.TextWrapping = TextWrapping.Wrap;
+        return Stack(6, new Viewbox { Width = 96, Height = 56, Child = joy,
+            HorizontalAlignment = HorizontalAlignment.Center }, preview);
     }
     private Control BuildSpeechSettings()
     {
