@@ -3,7 +3,7 @@ using VoiSlate.Models;
 namespace VoiSlate.Services;
 
 /// <summary>
-/// 会话状态只读访问（C-1：ITakeFlowService 只依赖本接口，不依赖 VM 具体类型）。
+/// 会话状态只读访问（让消费者只依赖接口、不依赖 VM 具体类型）。
 /// 由 RecordingSessionViewModel 实现（B）；P0.5 提供 SessionStateImpl 最小实现占位。
 /// N2：TakeCount = 200（take 列范围常量，对齐原版 take 1..200）。
 /// </summary>

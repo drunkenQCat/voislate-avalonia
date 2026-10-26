@@ -5,7 +5,7 @@ using VoiSlate.Services;
 namespace VoiSlate.ViewModels;
 
 /// <summary>
-/// 会话状态单例（契约 §4 RecordingSessionViewModel；实现 ISessionState — C-1：ITakeFlowService 只依赖本接口）。
+/// 会话状态单例（契约 §4 RecordingSessionViewModel；实现同名的 ISessionState 接口）。
 /// 对齐原版 SlateStatusNotifier：13 键即时写 ISessionSettingsStore（键名 <see cref="SessionKeys"/>；
 /// 默认值 isLinked=true、recordLinker="-T"、prefixType="default"、customPrefix="custom"、
 /// date=TodayKey；当日 recordCount 恢复、跨日归 1 —— 构造函数加载）。

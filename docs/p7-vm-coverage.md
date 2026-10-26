@@ -109,3 +109,35 @@
 
 1. **只重写 `OnKeyDown` 收不到音量键** —— Avalonia 的 Android 视图先消费按键，第一版真机表现是「按了完全没反应、截图前后 0 像素差异」。改为重写 `MainActivity.DispatchKeyEvent`。
 2. **不能用实例注册表 + `Current` 属性** —— Android 上 Avalonia 的 `Application` 初始化早于 `MainActivity.OnCreate`，视图构造订阅时 `HardwareKeys.Current` 还是 null。logcat 里的 `handlers=0` 就是证据。现在 `VoiSlate.Services.HardwareKeys` 是静态事件（`Pressed`/`Raise`/`HasHandlers`），`IHardwareKeyService` 接口与 `NoopHardwareKeyService` 一并删除（DI 注册也删了，它随 P7 的 RecordViewModel 一起失去消费者）。
+
+## 11. legacy 写入器拔除 + 触觉反馈恢复（2026-10-26，第二阶段收尾）
+
+### 11.1 删除的 legacy 链路
+
+| 删除对象 | 原位置 | 为什么可以删 |
+|---|---|---|
+| `IScheduleBook` + `LiteDbScheduleBook` | `src/VoiSlate/Services/IScheduleBook.cs` | 唯一消费者是 `TakeFlowService` 的三个 Provider 委托（`SceneLabelProvider`/`ShotLabelProvider`/`CurrentObjectsProvider`）；桌面与 Android 都改由 `DesktopWorkspaceService` 直接读 `IScheduleStore`（`LiteDbScheduleStore`） |
+| `ITakeFlowService` + `TakeFlowService` | `src/VoiSlate/Services/{ITakeFlowService,TakeFlowService}.cs` | 其写入口径（`AddAsync`/`RewindAsync`/`ResetOkStatus`）已被 `DesktopWorkspaceService.SaveTakeAsync`/`UndoAsync` 完整取代；`App.axaml.cs` 里连 DI 注册都没人再解析，Android 分支还残留一次 `InitializeAsync`（本轮一并删除） |
+| `IHapticsService` + `NoopHapticsService` | `src/VoiSlate/Services/FeedbackServices.cs` | 唯一消费者是 `TakeFlowService`；改为静态注册点 `Haptics` |
+| 测试 | `tests/VoiSlate.Tests/TakeFlowServiceTests.cs`（14 条）、`Services/ScheduleStoreTests.Writes_Are_Readable_By_LiteDbScheduleBook` | 连同被测对象一起删 |
+
+**保留并迁移的**：
+
+- `SceneScheduleDoc` 原本住在 `IScheduleBook.cs` 里，被 `SeedService` 与 `LiteDbScheduleStore` 共用 → 独立成 `src/VoiSlate/Services/SceneScheduleDoc.cs`。
+- `RepositoryTests.Seed_Inserts_Two_Scenes_Once` 原先借 `LiteDbScheduleBook` 断言播种结果 → 改为读生产实现 `LiteDbScheduleStore.LoadAllAsync()`，覆盖点（两场 / 3 镜 / objects / Note.Type / Note.Append）一条不少。
+- `IFileNamingService`、`IPickerHistoryStore`、`IAsrService`、`IToastService` 仍在 DI 里注册但暂无生产线消费者（`IPickerHistoryStore` 还被 `DayRolloverService` 引用）。它们的类与单测保留，作为文件命名/取景历史的契约基线；要不要一起清掉等下一个功能需求再定。
+
+### 11.2 触觉反馈（原版行为 1:1）
+
+| 交互 | 幅度/时长 | 依据 |
+|---|---|---|
+| 记一条 | 128 / 150ms | `record_page.dart:296-299` else 支 |
+| 记假条 | 240 / 900ms | 同上 `currentTkType == TakeType.fake` 支 |
+| 撤回 | 240 / 900ms | `record_page.dart:347-348` `drawBackItem()` |
+
+- 新增 `src/VoiSlate/Services/Haptics.cs`（静态 `Impl` 注册点 + 语义方法 `TakeSaved(bool fake)` / `Undone()`）。
+- 新增 `src/VoiSlate.Android/AndroidHaptics.cs`（`VibratorManager`(API31+) / `Vibrator`(26..30) + `VibrationEffect.CreateOneShot`，不支持幅度控制时退回 255），由 `AndroidApp` 构造函数 `Install()`。
+- `AndroidManifest.xml` 补 `android.permission.VIBRATE`。
+- 视图侧：`DesktopWorkspaceView.SaveTake(...)` / `UndoTake()` 在**服务调用成功之后**触发，覆盖保存按钮、假条、结束本镜、音量上键、口袋锁长按、`Ctrl+Enter`、撤回按钮、音量下键、`Ctrl+Shift+Z` 九条入口。
+- 回归用例：`tests/VoiSlate.Tests/Desktop/WorkspaceHapticsTests.cs`（幅度/时长表、无实现时静默、UI 层「保存→短震 / 撤回→长震」）。
+- 验收：`dotnet build VoiSlate.slnx` 0 error；`dotnet test` **274 passed / 6 skipped / 280**；`dotnet build src/VoiSlate.Android/VoiSlate.Android.csproj` 0 error。

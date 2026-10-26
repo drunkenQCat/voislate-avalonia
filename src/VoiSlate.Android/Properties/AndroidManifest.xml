@@ -4,5 +4,7 @@
     <!-- 网络：百炼实时识别是 WSS 长连接（Release 包不会自动补 INTERNET） -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 触觉反馈：记条/假条/撤回的震动（原版用 vibration 包，manifest 同样声明了它） -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <application android:label="VoiSlate" android:icon="@mipmap/appicon" android:allowBackup="true" android:supportsRtl="true" />
 </manifest>

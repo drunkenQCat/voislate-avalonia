@@ -19,16 +19,9 @@ public sealed class NoopToastService : IToastService
     }
 }
 
-/// <summary>触觉反馈（原版 Vibration；桌面无触觉，抽象为可注入）。P0.5 提供 Noop 实现。</summary>
-public interface IHapticsService
-{
-    void Vibrate(int amplitude, int durationMs);
-}
-
-public sealed class NoopHapticsService : IHapticsService
-{
-    public void Vibrate(int amplitude, int durationMs)
-    {
-        // P0.5: no-op
-    }
-}
+/// <summary>
+/// 触觉反馈已改为静态注册点 <see cref="Haptics"/>（Android 装真实现，桌面为 null）。
+/// 原 <c>IHapticsService</c>/<c>NoopHapticsService</c> 的唯一消费者是已删除的 legacy
+/// <c>TakeFlowService</c>；而 DI 实例实现会在「Avalonia 初始化早于平台注册」时拿到 null，
+/// 所以不再走 DI 而走静态注册点。
+/// </summary>

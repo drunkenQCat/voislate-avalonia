@@ -19,7 +19,7 @@ public enum RecorderType
 /// <summary>
 /// RecorderType 互操作（原版持久化字符串 + P0.5 PrefixType 兼容映射）。
 /// P0.5 的 <see cref="PrefixType"/>（Enums.cs）是内部发明、非契约成员；契约收敛后应统一为
-/// <see cref="RecorderType"/>（E 演进 IFileNamingService/ITakeFlowService 时随契约 bump 切换）。
+/// <see cref="RecorderType"/>（legacy ITakeFlowService 已删除；保留类型供 IFileNamingService 契约使用）。
 /// </summary>
 public static class RecorderTypeExtensions
 {

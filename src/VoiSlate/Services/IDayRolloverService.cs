@@ -5,11 +5,11 @@ namespace VoiSlate.Services;
 /// <summary>
 /// 跨天补偿（契约 §3 IDayRolloverService + ADR-008 启动序第 3 步；对齐原版 main.dart 日期登记/清空逻辑
 /// + DateChecker 定时检测）。
-/// - IsNewDay：持久化"上一活动日"（ISessionSettingsStore.date，TakeFlowService 记条时同步）≠ 今天。
+/// - IsNewDay：持久化"上一活动日"（ISessionSettingsStore.date）≠ 今天。
 /// - OnStartup：新日志日 → recordCount 归 1 + picker_history 清空 + 日期登记（settings.date = today）（B9）；
 ///   同日启动不动作。
 /// - 定时检测（PeriodicTimer 1min 起，契约"新能力"F4）：每次 tick 执行同一补偿。
-/// - 事件 DayChanged：供 ITakeFlowService（演进权归 E）订阅以同步内存文件号（见报告缺口；当前不改既有文件）。
+/// - 事件 DayChanged：跨天补偿后触发（供未来在内存里持有文件号的消费者同步；当前无订阅者）。
 /// 说明：契约签名要求 OnStartup 为 void；内部存储操作同步完成（LiteDB 操作本身同步，组合根调用，
 /// 与 App.axaml.cs 既有 .GetAwaiter().GetResult() 模式一致）。
 /// </summary>
@@ -24,7 +24,7 @@ public interface IDayRolloverService : IDisposable
     /// <summary>启动定时检测（默认 1 分钟；可注入更短间隔便于测试）。幂等（已启动则忽略）。</summary>
     void StartPeriodicCheck(TimeSpan? interval = null);
 
-    /// <summary>完成一次跨天补偿后触发（供 ITakeFlowService 同步内存文件号，后续演进）。</summary>
+    /// <summary>完成一次跨天补偿后触发（当前无订阅者，保留给后续演进）。</summary>
     event Action? DayChanged;
 }
 

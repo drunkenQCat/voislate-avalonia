@@ -25,7 +25,7 @@ public partial class App : Application
     {
         // ---- 启动时序（契约 v0.5 ADR-008，P0.5 落实）----
         // LiteDbStore.Open → SeedService.EnsureSeededAsync → IDayRolloverService.OnStartup(P0.5 占位跳过)
-        // → 装配 DI → ITakeFlowService.InitializeAsync → MainWindow。
+        // → 装配 DI → MainWindow（legacy ITakeFlowService 写入器已于 2026-10-26 删除）。
         var services = new ServiceCollection();
         ConfigureServices(services);
         _services = services.BuildServiceProvider();
@@ -44,7 +44,6 @@ public partial class App : Application
                     using var scope = _services.CreateScope();
                     await _services.GetRequiredService<ISeedService>().EnsureSeededAsync(ct);
                     await _services.GetRequiredService<RecordingSessionViewModel>().Initialization;
-                    await _services.GetRequiredService<ITakeFlowService>().InitializeAsync(ct);
                     Log.Information("Android deferred startup seeding completed");
                 }
                 catch (Exception ex)
@@ -157,29 +156,13 @@ public partial class App : Application
         services.AddSingleton<ISessionSettingsStore, LiteDbSessionSettingsStore>();
         services.AddSingleton<ILogRepository, LiteDbLogRepository>();
         services.AddSingleton<IPickerHistoryStore, LiteDbPickerHistoryStore>();
-        services.AddSingleton<IScheduleBook, LiteDbScheduleBook>();
         services.AddSingleton<ISeedService, SeedService>();
         services.AddSingleton<IAsrService, MockAsrService>();
         services.AddSingleton<IToastService, NoopToastService>();
-        services.AddSingleton<IHapticsService, NoopHapticsService>();
-        services.AddSingleton<ITakeFlowService>(sp =>
-        {
-            var svc = new TakeFlowService(
-                sp.GetRequiredService<ILogRepository>(),
-                sp.GetRequiredService<IPickerHistoryStore>(),
-                sp.GetRequiredService<ISessionState>(),
-                sp.GetRequiredService<IFileNamingService>(),
-                sp.GetRequiredService<ISessionSettingsStore>(),
-                sp.GetRequiredService<ITimeProvider>(),
-                sp.GetRequiredService<IHapticsService>(),
-                sp.GetRequiredService<IToastService>());
-            var book = sp.GetRequiredService<IScheduleBook>();
-            svc.SceneLabelProvider = () => book.SceneLabel(0);
-            svc.ShotLabelProvider = () => book.ShotLabel(0, 0);
-            svc.CurrentObjectsProvider = () => book.ObjectsOf(0, 0);
-            return svc;
-        });
 
+        // 已删除 legacy 写入器链路（2026-10-26）：IScheduleBook/LiteDbScheduleBook 与
+        // ITakeFlowService/TakeFlowService 都不再有消费者 —— 桌面与 Android 的记录数据面统一由
+        // DesktopWorkspaceService + ILogRepository 承担。裁定记录见 docs/p7-vm-coverage.md §11。
         // ==== 集成接线（C 合入后按 B 真实 VM 构造器重写；新增缺补服务生产实现）====
         services.AddSingleton<IExportService, ExportService>();
         // 计划页数据面：真实实现（LiteDb 落库 + SeedData 播种：1A 万星园 / 2A 洛肯实验室）。

@@ -9,7 +9,7 @@ namespace VoiSlate.Services;
 /// prefix 优先级 custom → sound devices → default）。
 /// 契约 §2：prefix 模式以 <see cref="RecorderType"/> 表达（见 <see cref="RecorderType"/> 属性；
 /// <see cref="PrefixMode"/> 为 P0.5 兼容别名，E 演进 ITakeFlowService 后移除）。
-/// + C-2：唯一实例由 ITakeFlowService 持用，DI 单例；prevFileName 在 number==1 时返回空串（原版守卫依赖此语义）。
+/// + C-2：DI 单例（legacy ITakeFlowService 删除后暂无生产线消费者，行为由单测钉住）；prevFileName 在 number==1 时返回空串（原版守卫依赖此语义）。
 /// </summary>
 public interface IFileNamingService
 {
@@ -19,7 +19,7 @@ public interface IFileNamingService
     PrefixType PrefixMode { get; set; }
     string CustomPrefix { get; set; }
 
-    /// <summary>number 变更事件（C-2：ITakeFlowService 转发为 FileNumberChanged）。</summary>
+    /// <summary>number 变更事件。</summary>
     event Action<int>? NumberChanged;
 
     void SetValue(int newValue);

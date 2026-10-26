@@ -66,16 +66,4 @@ public class ScheduleStoreTests
         Assert.Equal("2A", loaded[1].Info.Name);
         Assert.Equal("万星园", loaded[0].Info.Note.Type);
     }
-
-    [Fact]
-    public async Task Writes_Are_Readable_By_LiteDbScheduleBook()
-    {
-        using var store = NewStore();
-        await new LiteDbScheduleStore(store).SaveAllAsync([Scene("7A", Shot("1", "A"))]);
-
-        // 既有只读 ScheduleBook 读同一集合（跨类读写兼容）
-        var book = new LiteDbScheduleBook(store);
-        Assert.Equal(1, book.SceneCount);
-        Assert.Equal("7A", book.SceneLabel(0));
-    }
 }

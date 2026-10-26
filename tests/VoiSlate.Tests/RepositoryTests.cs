@@ -125,16 +125,17 @@ public class LiteDbRepositoryTests
         await seed.EnsureSeededAsync(CancellationToken.None);
         await seed.EnsureSeededAsync(CancellationToken.None); // 幂等
 
-        var book = new LiteDbScheduleBook(store);
-        Assert.Equal(2, book.SceneCount);
-        Assert.Equal("1A", book.SceneLabel(0));
-        Assert.Equal("2A", book.SceneLabel(1));
-        Assert.Equal(3, book.GetScene(0).Count);
-        Assert.Equal("1A", book.ShotLabel(0, 0));
-        Assert.Equal(["缪尔赛斯", "塞雷娅"], book.ObjectsOf(0, 0));
-        Assert.Equal("万星园", book.GetScene(0).Info.Note.Type);
+        // 读回走生产实现（LiteDbScheduleStore）：「种子真的落库、且只落一次」是这里要钉的行为。
+        var scenes = await new LiteDbScheduleStore(store).LoadAllAsync();
+        Assert.Equal(2, scenes.Count);
+        Assert.Equal("1A", scenes[0].Info.Name);
+        Assert.Equal("2A", scenes[1].Info.Name);
+        Assert.Equal(3, scenes[0].Count);
+        Assert.Equal("1A", scenes[0][0].Name);
+        Assert.Equal(["缪尔赛斯", "塞雷娅"], scenes[0][0].Note.Objects);
+        Assert.Equal("万星园", scenes[0].Info.Note.Type);
         Assert.Equal("三人会面，缪尔赛斯提出了她的计划，塞雷娅和克里斯滕都表示了支持。",
-            book.GetScene(0).Info.Note.Append);
+            scenes[0].Info.Note.Append);
     }
 
     [Fact]

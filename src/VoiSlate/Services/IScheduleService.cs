@@ -10,7 +10,7 @@ namespace VoiSlate.Services;
 /// - 重名：场名重名抛 DuplicateItemException（场景 BsonId=Info.Name，DataList 语义扩展）；镜重名由 DataList 抛。
 /// - 简化 undo：每次变更前快照工作副本（上限 20 步）；UndoAsync 回滚上一步并落库（原版无 undo，迁移新增，契约 §2.7）。
 /// - 读接口（SceneLabel/ShotLabel/ObjectsOf/GetScene/SceneCount）读服务内工作副本——页面激活时调 LoadAllAsync
-///   刷新（R7）；C 接线 TakeFlowService 的标签/对象 Provider 时可改用本服务（取代缓存常驻的 IScheduleBook）。
+///   刷新（R7）。
 /// </summary>
 public interface IScheduleService
 {

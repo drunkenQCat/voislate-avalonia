@@ -51,7 +51,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
         DetachedFromVisualTree += (_, _) => { _service.Changed -= OnChanged; _toastTimer?.Stop(); _hold.Stop(); _finishVoice?.Invoke(); HardwareKeys.Pressed -= OnHardwareKey; };
         // 音量键：Android 由 MainActivity 注入实现（原版就是这样记条/撤回，单手戴手套也能用）；桌面为 null，走键盘快捷键。
         HardwareKeys.Pressed += OnHardwareKey;
-        _hold.Tick += (_, _) => { _hold.Stop(); if (_holding) { _held = true; Run(() => _service.SaveTakeAsync()); } };
+        _hold.Tick += (_, _) => { _hold.Stop(); if (_holding) { _held = true; SaveTake(); } };
         SizeChanged += (_, _) => { var compact = Bounds.Width < 820; if (compact != _compact) { _compact = compact; Render(); } };
         AddHandler(InputElement.KeyDownEvent, (_, e) => HandleShortcut(e), Avalonia.Interactivity.RoutingStrategies.Tunnel);
         InitializeBackups();
@@ -69,7 +69,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
         else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key == Key.Z) { AskUndo(); e.Handled = true; }
         else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Enter)
         {
-            if (_service.State.PocketLock) Toast("口袋锁已开启，请长按记条按钮"); else Run(() => _service.SaveTakeAsync());
+            if (_service.State.PocketLock) Toast("口袋锁已开启，请长按记条按钮"); else SaveTake();
             e.Handled = true;
         }
         else if (e.Key == Key.Escape) { Navigate("record"); e.Handled = true; }
@@ -85,7 +85,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
             if (key == HardwareKey.VolumeUp)
             {
                 if (_service.State.PocketLock) Toast("口袋锁已开启，请长按记条按钮");
-                else Run(() => _service.SaveTakeAsync(), "已记一条 · 音量上键");
+                else SaveTake(success: "已记一条 · 音量上键");
             }
             else AskUndo();
         });
@@ -125,6 +125,15 @@ public sealed partial class DesktopWorkspaceView : UserControl
         catch (Exception ex) { Toast(ex.Message, true); }
         finally { _busy = false; }
     }
+    /// <summary>记一条拍板：成功后给触觉反馈（对齐原版 record_page.dart 的 addItem：正常 128/150、假条 240/900）。</summary>
+    private void SaveTake(bool end = false, bool fake = false, string? success = null) =>
+        Run(async () => { await _service.SaveTakeAsync(end, fake); Haptics.TakeSaved(fake); }, success);
+
+    /// <summary>撤回一条：成功后给「长震动」（原版 drawBackItem 的 240/900）。</summary>
+    private void UndoTake() =>
+        Run(async () => { await _service.UndoAsync(); Haptics.Undone(); },
+            "上一条编号、评价与标注已恢复，可修改后重新保存");
+
     private void Toast(string message, bool error = false)
     {
         _toastTimer?.Stop(); _toast.Child = T(message, 13, "#FFFFFF"); _toast.Background = Brush(error ? "#9A4848" : "#2C4249");
@@ -273,7 +282,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
         var add = B(_service.State.PocketLock ? "＋\n长按记条" : "＋\n下一条", () =>
         {
             if (_service.State.PocketLock) { if (!_held) Toast("口袋锁已开，请按住 650 毫秒"); }
-            else Run(() => _service.SaveTakeAsync(), "当前条已保存，可撤回修改");
+            else SaveTake(success: "当前条已保存，可撤回修改");
         }, "purple", "add-take");
         add.Width = 92; add.Height = 82; add.CornerRadius = new CornerRadius(40); add.IsEnabled = _service.Shot is not null && !d.Ended;
         Point holdFrom = default;
@@ -504,18 +513,18 @@ public sealed partial class DesktopWorkspaceView : UserControl
         var d = _service.Draft;
         if (!d.Ended && (d.RecordingNote.Length > 0 || d.ShotNote.Length > 0 || d.Picture != ShtStatus.NotChecked || d.Sound != TkStatus.NotChecked))
             if (!await Confirm("撤回上一条", "当前草稿将替换为上一条的编号、评价和标注，是否继续？")) return;
-        Run(() => _service.UndoAsync(), "上一条编号、评价与标注已恢复，可修改后重新保存");
+        UndoTake();
     }
     private async void ShowMore()
     {
         _finishVoice?.Invoke(); WorkspaceDialog? dialog = null;
         var body = Stack(10);
-        var end = B("✓ 保存并结束本镜", () => { dialog!.Close(); Run(() => _service.SaveTakeAsync(true), "最后一条已保存，本镜结束"); }, "primary"); end.IsEnabled = !_service.Draft.Ended && _service.Shot is not null;
+        var end = B("✓ 保存并结束本镜", () => { dialog!.Close(); SaveTake(end: true, success: "最后一条已保存，本镜结束"); }, "primary"); end.IsEnabled = !_service.Draft.Ended && _service.Shot is not null;
         body.Children.Add(end); body.Children.Add(T("未评项设为画面保 / 声音可，保留已有评价。", 11, "#8A9988"));
         body.Children.Add(B(_service.State.Linked ? "进入补录模式" : "退出补录模式", () => { dialog!.Close(); Run(() => _service.ToggleRetakeAsync()); }));
         body.Children.Add(T("补录用 A、B、C 标识；次号冻结，文件号继续前进。", 11, "#8A9988"));
         body.Children.Add(B("手动改号 · 场 / 镜 / 次", () => { dialog!.Close(); ShowRenum(); }));
-        body.Children.Add(B("记录假条 F", () => { dialog!.Close(); Run(() => _service.SaveTakeAsync(fake: true), "假条已保存，文件号前进，正常次号保留"); }));
+        body.Children.Add(B("记录假条 F", () => { dialog!.Close(); SaveTake(fake: true, success: "假条已保存，文件号前进，正常次号保留"); }));
         body.Children.Add(B("人物 / 录音轨道", () => { dialog!.Close(); ShowTracks(); }));
         body.Children.Add(B("修改当前镜头信息", () => { dialog!.Close(); _planScene = _service.State.Scene; ShowPlanEditor(_service.Shot, false); }));
         body.Children.Add(B("指定文件序号（补录模式）", () => { dialog!.Close(); ShowFileNumber(); }));

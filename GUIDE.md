@@ -19,7 +19,7 @@ VoiSlate 是**声音场记无纸化工具**（拍板场记）：记录每一条�
 | 技术栈 | .NET 10（SDK 10.0.400）+ Avalonia 12.1.1 + CommunityToolkit.Mvvm 8.4.2 + LiteDB 5.0.21 + CsvHelper 33 + Serilog + Microsoft.Extensions.DependencyInjection |
 | 目标平台 | 桌面 `net10.0`（✅ 主目标）+ Android `net10.0-android`（✅ 真机已验证，`a326284`） |
 | ASR/录音/震动/Toast | 接口先行，Mock 实现（`MockAsrService`/`NoopHapticsService`/`NoopToastService` 等） |
-| 测试 | 286 通过 / 6 跳过 / 292（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身；跳过的 6 条是 `WindowsOnlyFactAttribute`） |
+| 测试 | 274 通过 / 6 跳过 / 280（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身；跳过的 6 条是 `WindowsOnlyFactAttribute`） |
 | 远程 | https://github.com/drunkenQCat/voislate-avalonia （main 分支） |
 
 ## 2. 目录地图
@@ -112,7 +112,7 @@ voislate-avalonia/
 # 前提：.NET SDK 10.0.400；Android 需 workload：dotnet workload install android
 # 桌面构建 / 测试（CI 同此）
 dotnet build VoiSlate.slnx -c Release        # 期望 0 warning 0 error
-dotnet test tests/VoiSlate.Tests -c Release  # 期望 286 passed / 6 skipped（共 292）
+dotnet test tests/VoiSlate.Tests -c Release  # 期望 274 passed / 6 skipped（共 280）
 
 # 桌面运行
 dotnet run --project src/VoiSlate -c Release
@@ -194,6 +194,22 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 1. **只重写 `OnKeyDown` 收不到音量键**——Avalonia 的 Android 视图会先消费按键。必须在 `MainActivity.DispatchKeyEvent` 里拦：`if (e is not null && e.Action == KeyEventActions.Down && HardwareKeysService.Handle(e.KeyCode)) return true;`（返回 true 才不触发系统音量条）。
 2. **不能用「实例注册表 + `Current` 属性」**——Android 上 Avalonia 的 `Application` 初始化早于 `MainActivity.OnCreate`，视图构造时读 `Current` 必然是 null，真机表现是 `handlers=0`（键到了 `DispatchKeyEvent` 却没人响应，界面毫无反应）。现在 `VoiSlate.Services.HardwareKeys` 是**静态事件**（`Pressed` / `Raise` / `HasHandlers`），与平台实现何时注册无关；`AndroidHardwareKeyService` 只负责把 `Keycode.VolumeUp/Down` 映射后 `HardwareKeys.Raise(...)`。
 
+#### 触觉反馈（Android）
+
+原版 Flutter 用 `vibration` 包主动震动（`lib/pages/record_page.dart:296-299,347-348`），语义只有三种，现已 1:1 对齐：
+
+| 交互 | 幅度 / 时长 | 入口 |
+|---|---|---|
+| 记一条（含音量上键、口袋锁长按、`Ctrl+Enter`） | 128 / 150ms | `Haptics.TakeSaved(fake: false)` |
+| 记假条（`记录假条 F`） | 240 / 900ms | `Haptics.TakeSaved(fake: true)` |
+| 撤回（撤回按钮、音量下键、`Ctrl+Shift+Z`） | 240 / 900ms | `Haptics.Undone()` |
+
+- **`saveTake` 成功之后才震**：`DesktopWorkspaceView.SaveTake(...)` / `UndoTake()` 把 `Haptics.*` 放在 `await _service.SaveTakeAsync(...)` 之后，失败（如「文件号已存在」）不震。
+- **注册点在静态类 `VoiSlate.Services.Haptics.Impl`**，不是 DI：Android 在 `AndroidApp` 构造函数里 `AndroidHaptics.Install()`（进程里最早可跑托管代码处）。**别再改回 DI 实例**——Avalonia 的 Application 初始化早于 MainActivity，视图构造时会拿到 Noop（见上条音量键陷阱 2）。
+- 实现：API 31+ 走 `VibratorManager.DefaultVibrator`，26..30 走 `Vibrator`，`VibrationEffect.CreateOneShot(duration, amplitude)`。桌面 `Impl` 为 null，调用静默丢弃（原版也是探测 `hasVibrator()` 后置 `_canVibrate=false`）。
+- **不要用 `HasAmplitudeControl` 去「纠正」幅度**：RMX5060 上该探针返回 false，但显式幅度照样被 HAL 采纳（真机日志 `amplitude` 由 `1.0` 变成 `0.50`）。传请求值即可。
+- manifest 必须声明 `android.permission.VIBRATE`（普通权限，装包即授予，无需运行时弹窗）。
+
 ## 9. 模块地图（Services / ViewModels / Controls / 数据层）
 
 ### 9.1 Services（25 个文件；接口与实现多在同文件）
@@ -250,7 +266,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 
 ## 10. 测试矩阵（tests/VoiSlate.Tests，xUnit，无 Moq 全手写 Fake/Stub/Spy）
 
-约 200 `[Fact]` + 11 `[Theory]`（≈51 行 InlineData），合计 **286 用例全绿 / 6 跳过（共 292）**（2026-10-26 删 P7 的 56 条 VM 用例后）。
+约 200 `[Fact]` + 11 `[Theory]`（≈51 行 InlineData），合计 **274 用例全绿 / 6 跳过（共 280）**（2026-10-26：删 P7 的 56 条 VM 用例、legacy TakeFlowService 的 15 条用例，新增迁移/音量键/触觉/窄屏用例）。
 
 | 组 | 文件（节选） | 覆盖 |
 |---|---|---|
@@ -278,7 +294,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 - [ ] Android Manifest 主题保持 AppCompat 系列
 - [ ] 改界面只改 `Desktop/DesktopWorkspaceView.cs`（+ 4 个分部类）；窄屏改动后跑 `WorkspacePhoneLayoutTests`（390×840 下底部 Tab 必须 4 等分、高 ≥44、三页无控件越界）
 - [ ] 新增源文件放 src/VoiSlate 对应子目录（SDK glob 免改 csproj）；测试放 tests/VoiSlate.Tests 对应子目录，**只新增文件不改既有文件**
-- [ ] 桌面回归：`dotnet build` 0w/0e + `dotnet test` 286/292（6 跳过属正常）
+- [ ] 桌面回归：`dotnet build` 0w/0e + `dotnet test` 274/280（6 跳过属正常）
 - [ ] Android 改动 → 发 arm64 APK → 真机安装启动验证（崩溃查 logcat FATAL）
 
 ## 13. 当前状态里程碑
