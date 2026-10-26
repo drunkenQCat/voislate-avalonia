@@ -12,7 +12,6 @@ using VoiSlate.Infrastructure;
 using VoiSlate.Models;
 using VoiSlate.Services;
 using VoiSlate.ViewModels;
-using VoiSlate.Views;
 
 namespace VoiSlate;
 
@@ -189,41 +188,10 @@ public partial class App : Application
         services.AddSingleton<IScheduleStore, LiteDbScheduleStore>();
         services.AddSingleton<ICsvScheduleParser, CsvScheduleParserService>();
 
-        // RecordViewModel：Scoped 生命周期（契约 C-6：进入创建 / 退出释放）——经工厂按页创建。
-        services.AddSingleton<Func<RecordViewModel>>(sp => () => new RecordViewModel(
-            sp.GetRequiredService<ISessionSettingsStore>(),
-            sp.GetRequiredService<ITakeFlowService>(),
-            sp.GetRequiredService<IAsrService>(),
-            sp.GetRequiredService<IHardwareKeyService>(),
-            sp.GetRequiredService<RecordingSessionViewModel>(),
-            sp.GetRequiredService<ITimeProvider>(),
-            sp.GetRequiredService<ILogRepository>()));
-
-        // 场记页：扁平列表 VM（C 的 SlateLogView 数据面；MainViewModel 导航该实例）。
-        services.AddSingleton<SlateLogViewModel>(sp => new SlateLogViewModel(
-            sp.GetRequiredService<ITakeFlowService>(),
-            sp.GetRequiredService<ILogRepository>(),
-            sp.GetRequiredService<ITimeProvider>(),
-            sp.GetRequiredService<IExportService>()));
-
-        services.AddSingleton<ScheduleViewModel>(sp => new ScheduleViewModel(
-            sp.GetRequiredService<IScheduleStore>(),
-            sp.GetRequiredService<ICsvScheduleParser>(),
-            sp.GetRequiredService<RecordingSessionViewModel>()));
-
-        services.AddSingleton<SettingsViewModel>(sp => new SettingsViewModel(
-            sp.GetRequiredService<ISessionSettingsStore>(),
-            sp.GetRequiredService<ILogRepository>(),
-            sp.GetRequiredService<ITakeFlowService>(),
-            sp.GetRequiredService<IExportService>(),
-            sp.GetRequiredService<ITimeProvider>(),
-            sp.GetRequiredService<RecordingSessionViewModel>()));
-
-        services.AddSingleton<MainViewModel>(sp => new MainViewModel(
-            sp.GetRequiredService<Func<RecordViewModel>>(),
-            sp.GetRequiredService<ScheduleViewModel>(),
-            sp.GetRequiredService<SlateLogViewModel>(),
-            sp.GetRequiredService<SettingsViewModel>()));
+        // P7 页面 ViewModel（Record/Schedule/SlateLog/SlateLogPage/Settings/Main/LogEditor/SlateColumn/Placeholder）
+        // 已于 2026-10-26 整批删除：桌面与 Android 共用 Desktop/DesktopWorkspaceView，数据面由
+        // DesktopWorkspaceService（+ Editing/Backup/Speech/Preferences/Legacy 分部类）承担。
+        // 删除前的能力对照与迁移记录见 docs/p7-vm-coverage.md。
     }
 
     private void OnShutdown()

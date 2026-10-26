@@ -84,3 +84,19 @@
 | NextKey 自动编号 | `DesktopWorkspaceLegacy.NextPlanKey(scene, isScene)`，`ShowPlanEditor` 新建时预填 | `Next_plan_key_continues_the_existing_numbering` |
 
 口径补充：`RecordViewModel` 的「文件号 <1 静默 clamp」**未**照搬——现役抛异常并禁止回退到已占用编号，是有意的收紧；只补了「候选去重」这一半。
+
+## 9. 阶段 3 实施状态（清场完成，2026-10-26）
+
+| 删除对象 | 结果 |
+|---|---|
+| 9 个 ViewModel | `src/VoiSlate/ViewModels/{Main,Record,Schedule,Settings,SlateLog,SlateLogPage,SlateColumn,LogEditor,Placeholder}ViewModel.cs` 已删；仅留 `RecordingSessionViewModel.cs`（现役 `ISessionState`） |
+| 8 个测试文件 + 56 条用例 | `tests/VoiSlate.Tests/ViewModels/{Main,Record,Schedule,Settings,SlateLog,SlateLogPage,SlateColumn,LogEditor}ViewModelTests.cs` 已删；用例数 341+6 → **285+6 = 291** |
+| `ViewModelTestDoubles.cs` | 整文件删除——它的 6 个替身（TestHardwareKeyService/StubScheduleStore/StubCsvScheduleParser/SpyExportService/ScheduleFactory/StubScheduleBook）只被已删的 VM 用例引用（服务层用例用的是 `TestDoubles/TestDoubles.cs`） |
+| `src/VoiSlate/Views/` | 整个目录消失（唯一残留的 `Converters.cs` 只被 `MainViewModel` 引用） |
+| 6 条 DI 注册 | `App.axaml.cs` 的 `Func<RecordViewModel>` + 4 个页面 VM + `MainViewModel` 全部移除，留注释指向本文档 |
+| `PlaceholderViewModel` | 已删；`SmokeTests` 改为断言真实类型与 `DesktopWorkspaceService` 主构造签名 |
+| 4 处过期注释 + 1 处 | `IScheduleService.cs:46`、`IScheduleStore.cs:6`、`ScheduleStore.cs:24`、`ScheduleCsvParser.cs:220`、`IExportService.cs:11` 全部改为指向 `DesktopWorkspaceService` |
+
+**未动（单独裁定）**：`IScheduleBook` / `LiteDbScheduleBook` 仍注册——`TakeFlowService` 的三个 Provider 委托（`SceneLabelProvider`/`ShotLabelProvider`/`CurrentObjectsProvider`）仍从它取数；`ITakeFlowService` 在桌面分支仍不初始化、Android 分支仍 `InitializeAsync`。两者的去留建议与「legacy 写入器是否还要保留」一起决策。
+
+**验收**：`dotnet build VoiSlate.slnx` 0 error；`dotnet test` **285 passed / 6 skipped / 291**；`dotnet build src/VoiSlate.Android/VoiSlate.Android.csproj` 成功。

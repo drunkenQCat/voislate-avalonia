@@ -8,7 +8,7 @@ namespace VoiSlate.Services;
 /// - SerializeLogs：VoiSlateJson.Options（camelCase 属性 + camelCase 短名枚举），与原件 JSON 格式兼容
 ///   （无日期字段、无 _id；Id/FileName 计算属性 [JsonIgnore]，ADR-005）。
 /// - SaveToFileAsync：写文件（目录不存在则创建）。
-/// 导出全部（跨日合并）由调用方（B 的 SlateLogPageViewModel/SettingsViewModel）收集各日期条目后调 SerializeLogs。
+/// 导出全部（跨日合并）由调用方（Desktop/DesktopWorkspaceBackup）收集各日期条目后调 SerializeLogs。
 /// </summary>
 public interface IExportService
 {

@@ -43,7 +43,7 @@ public interface IScheduleService
     /// <summary>撤销上一步（有可撤销项返回 true）。</summary>
     Task<bool> UndoAsync(CancellationToken ct);
 
-    /// <summary>任何写操作成功后触发（R7：页面激活刷新 / ScheduleViewModel 联动）。</summary>
+    /// <summary>任何写操作成功后触发（R7：页面激活刷新 / 计划页联动）。</summary>
     event Action? ScenesChanged;
 }
 

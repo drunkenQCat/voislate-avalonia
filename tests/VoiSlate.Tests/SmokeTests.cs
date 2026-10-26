@@ -8,8 +8,15 @@ public class SmokeTests
     [Fact]
     public void Main_Project_Types_Resolvable()
     {
-        var vm = new ViewModels.PlaceholderViewModel();
-        Assert.False(string.IsNullOrWhiteSpace(vm.PlaceholderText));
-        Assert.Equal("M0 skeleton compiles — P0.5 vertical slice next.", vm.PlaceholderText);
+        Assert.Equal("VoiSlate.Services.FileNumberingService", typeof(VoiSlate.Services.FileNumberingService).FullName);
+        var ctor = typeof(VoiSlate.Desktop.DesktopWorkspaceService).GetConstructor(new[]
+        {
+            typeof(VoiSlate.Services.IScheduleStore),
+            typeof(VoiSlate.Services.ILogRepository),
+            typeof(VoiSlate.Services.ISessionSettingsStore),
+            typeof(VoiSlate.Services.ITimeProvider),
+            typeof(VoiSlate.Desktop.IWorkspaceTransaction),
+        });
+        Assert.NotNull(ctor);
     }
 }

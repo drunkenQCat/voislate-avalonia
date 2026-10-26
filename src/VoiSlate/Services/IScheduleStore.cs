@@ -3,7 +3,7 @@ using VoiSlate.Models;
 namespace VoiSlate.Services;
 
 /// <summary>
-/// 场次计划持久化（契约 v0.5 §3 ScheduleStore；LiteDB "scenes" 集合；ScheduleViewModel 唯一写入口）。
+/// 场次计划持久化（契约 v0.5 §3 ScheduleStore；LiteDB "scenes" 集合；唯一写入口是 DesktopWorkspaceService）。
 /// P0.5 未产 → B 补桩，演进权归 E。
 /// </summary>
 public interface IScheduleStore

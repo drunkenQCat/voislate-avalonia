@@ -217,7 +217,7 @@ public static class CsvScheduleParser
 }
 /// <summary>
 /// 实例适配器：以 B 交付的契约接口形状 <see cref="ICsvScheduleParser"/> 暴露静态解析能力
-/// （B 的 ScheduleViewModel 依赖该接口；DI 建议注册本实现以启用真实 CSV 解析代替 Noop 桩）。
+/// （Desktop/DesktopWorkspaceService.ImportCsvAsync 依赖该接口；DI 里注册本实现以启用真实 CSV 解析）。
 /// </summary>
 public sealed class CsvScheduleParserService : ICsvScheduleParser
 {

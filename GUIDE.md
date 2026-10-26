@@ -19,7 +19,7 @@ VoiSlate 是**声音场记无纸化工具**（拍板场记）：记录每一条�
 | 技术栈 | .NET 10（SDK 10.0.400）+ Avalonia 12.1.1 + CommunityToolkit.Mvvm 8.4.2 + LiteDB 5.0.21 + CsvHelper 33 + Serilog + Microsoft.Extensions.DependencyInjection |
 | 目标平台 | 桌面 `net10.0`（✅ 主目标）+ Android `net10.0-android`（✅ 真机已验证，`a326284`） |
 | ASR/录音/震动/Toast | 接口先行，Mock 实现（`MockAsrService`/`NoopHapticsService`/`NoopToastService` 等） |
-| 测试 | 341 通过 / 6 跳过 / 347（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身；跳过的 6 条是 `WindowsOnlyFactAttribute`） |
+| 测试 | 285 通过 / 6 跳过 / 291（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身；跳过的 6 条是 `WindowsOnlyFactAttribute`） |
 | 远程 | https://github.com/drunkenQCat/voislate-avalonia （main 分支） |
 
 ## 2. 目录地图
@@ -44,9 +44,8 @@ voislate-avalonia/
 │   │   ├── Services/          # 25 个文件：服务接口与实现（业务规则 B1-B11 全在 TakeFlowService）
 │   │   ├── Infrastructure/    # LiteDbStore（开库/默认连接串/四集合）
 │   │   ├── Data/              # SeedData（空库播种两份生产场表）
-│   │   ├── ViewModels/        # 10 个 VM（其中 SlateLogPageViewModel 存在但未接入导航）
-│   │   ├── Desktop/           # ★ 唯一界面：DesktopWorkspaceView(UserControl) + 4 分部类 + 薄壳 Window + WorkspaceDialog
-│   │   ├── Views/             # 仅剩 Converters.cs（P7 的 16 个 .axaml 已于 2026-10-25 删除）
+│   │   ├── ViewModels/        # 仅剩 RecordingSessionViewModel（= ISessionState，现役在用）；P7 页面 VM 已于 2026-10-26 删除
+│   │   ├── Desktop/           # ★ 唯一界面与数据面：DesktopWorkspaceView(UserControl) + 5 分部类 + 薄壳 Window + WorkspaceDialog + Legacy
 │   │   ├── Controls/          # 16 个自研控件/逻辑（SlateWheel/SlideConfirmBar/DialFAB…）
 │   │   └── Themes/            # VoiSlatePalette.axaml（色板）+ Controls.axaml（控件默认样式）
 │   └── VoiSlate.Android/      # Android 壳工程（net10.0-android，仅入口，业务全在主工程）
@@ -102,11 +101,10 @@ voislate-avalonia/
 | `ISeedService → SeedService`、`IAsrService → MockAsrService` | |
 | `IToastService → NoopToastService`、`IHapticsService → NoopHapticsService` | ⚠️ `Controls/ToastService.cs` 有真实现但**未注册** |
 | `ITakeFlowService → TakeFlowService`（单例，唯一持用 FileNumberingService） | 注入 8 项 + 3 个 Provider 委托（SceneLabel/ShotLabel/ObjectsOf，**硬编码取第 0 场第 0 镜** `book.X(0,0)`） |
-| `IHardwareKeyService → NoopHardwareKeyService`、`IExportService → ExportService`、`IScheduleStore → NoopScheduleStore`（⚠️ 计划页当前不落库）、`ICsvScheduleParser → CsvScheduleParserService` | |
-| `Func<RecordViewModel>` 工厂 | Record 页 Scoped：进入创建、退出释放（契约 C-6） |
-| `SlateLogViewModel / ScheduleViewModel / SettingsViewModel / MainViewModel` | 单例；MainViewModel 吃工厂 + 3 个页面 VM |
+| `IHardwareKeyService → NoopHardwareKeyService`、`IExportService → ExportService`、`IScheduleStore → LiteDbScheduleStore`、`ICsvScheduleParser → CsvScheduleParserService` | ⚠️ NoopHardwareKeyService 只是占位：真实音量键走 `HardwareKeys.Current`（Android 在 `MainActivity.OnCreate` 注册） |
+| ~~`Func<RecordViewModel>` / 4 个页面 VM / `MainViewModel`~~ | **已删除**（2026-10-26）：界面与数据面统一由 `DesktopWorkspaceService` 承担 |
 
-**存在但未注册（要接线时从这里开始）**：`IDayRolloverService`、`IBackupService`、`IImportService`、`IRecordingService`、`IScheduleService`、`SlateLogPageViewModel`（树形分组版场记，实现完整但未参与导航——导航用的是扁平 `SlateLogViewModel`）、`LiteDbScheduleStore`（有真实序实现，未注册）、`ToastService`（真 Toast 实现，未注册）。
+**存在但未注册（要接线时从这里开始）**：`IDayRolloverService`、`IBackupService`、`IImportService`、`IRecordingService`、`IScheduleService`（已实现「至少 1 场 1 镜」守卫 / 任意索引 Move / 20 步整表 undo，可当参考实现）、`ToastService`（真 Toast 实现）。
 
 ## 6. 构建与运行命令
 
@@ -114,7 +112,7 @@ voislate-avalonia/
 # 前提：.NET SDK 10.0.400；Android 需 workload：dotnet workload install android
 # 桌面构建 / 测试（CI 同此）
 dotnet build VoiSlate.slnx -c Release        # 期望 0 warning 0 error
-dotnet test tests/VoiSlate.Tests -c Release  # 期望 341 passed / 6 skipped（共 347）
+dotnet test tests/VoiSlate.Tests -c Release  # 期望 285 passed / 6 skipped（共 291）
 
 # 桌面运行
 dotnet run --project src/VoiSlate -c Release
@@ -183,7 +181,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 
 **窗口/对话框**：`LogEditorWindow`（模态编辑单条场记，保存/删除经 ITakeFlowService 唯一写入口；SlateLogView 打开）、`QuickViewLogWindow`（只读速览 540×620，sublist(40) 已知行为；RecordView 打开）、`SmallEditDialog`（通用单值编辑，有 choices 显 ComboBox；两个 View 共用）。
 
-**转换器**（`Views/Converters.cs`）：`TkStatusToBrushConverter`（Ok绿/Bad红/灰）、`ShtStatusToBrushConverter`（Ok绿/Nice金/灰）、`PageKeyToBrushConverter`（导航高亮，值==参数→半透明 bahamaBlue）；`Palette` 静态类为内联色值占位（待切主题资源键）。
+**转换器**：`Views/Converters.cs` 已随 P7 页面一并删除（2026-10-26）；工作台的配色/显隐都在 `Desktop/DesktopWorkspaceView.cs` 里直接用代码决定，不再经过 XAML 转换器。
 
 **主题**（`Themes/`）：
 - `VoiSlatePalette.axaml` 契约必选键（**键名不得改**，PaletteResourceKeysTests 校验前缀 `VoiSlate.`）：`VoiSlate.Bg` / `VoiSlate.Primary`(#0067A0 bahamaBlue) / `VoiSlate.OkGreen` / `VoiSlate.BadRed` / `VoiSlate.NiceGold` / `VoiSlate.TextHint`；补充键（Wheel/Dial/Card 取色自原版）。
@@ -216,12 +214,10 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 | `IToastService` / `IHapticsService` | `NoopToastService` / `NoopHapticsService` | Toast 真实现存在未注册 |
 | `MicObjectsExtractor` | 静态 | shtNote 麦克风对象协议 `<obj/>` 解析 |
 
-### 9.2 ViewModels（10 个；层级见 §2 目录地图注释）
+### 9.2 ViewModels（仅 1 个：`RecordingSessionViewModel`）
 
-- `MainViewModel`：导航（Pages/CurrentPage/CurrentPageKey/NavigateCommand），页键常量 `record/schedule/slatelog/settings`。
+> 2026-10-26：P7 的 9 个页面 VM（Main/Record/Schedule/Settings/SlateLog/SlateLogPage/SlateColumn/LogEditor/Placeholder）已整批删除，其能力要么迁移进 `Desktop/DesktopWorkspace*`、要么判定为审计误报，逐条记录在 [docs/p7-vm-coverage.md](docs/p7-vm-coverage.md) §8。**新功能不要再往 ViewModel 层加**。
 - `RecordingSessionViewModel`：**实现 ISessionState**（Scene/Shot/TakeIndex + TakeCount=200 + SessionChanged），13 个 ObservableProperty 即时持久化到 ISessionSettingsStore；`Initialization` Task；Select{Scene,Shot,Take}/SetLink/SetOk{Take,Shot} 等。
-- `RecordViewModel`（Scoped）：三列（SceneCol/ShotCol/TakeCol `SlateColumnViewModel`）+ 文件号显示 + Activate/Deactivate 钩子 + 音量键。
-- `ScheduleViewModel` / `SlateLogViewModel`（扁平，导航中）/ `SlateLogPageViewModel`（树形分组，未接线）/ `SettingsViewModel` / `LogEditorViewModel` / `PlaceholderViewModel`（冒烟）。
 
 ### 9.3 Controls（16 个文件；控件代码 + 纯逻辑分离，逻辑可单测）
 
@@ -249,17 +245,17 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 
 ## 10. 测试矩阵（tests/VoiSlate.Tests，xUnit，无 Moq 全手写 Fake/Stub/Spy）
 
-约 239 `[Fact]` + 11 `[Theory]`（≈51 行 InlineData），合计 **341 用例全绿 / 6 跳过（共 347）**。
+约 200 `[Fact]` + 11 `[Theory]`（≈51 行 InlineData），合计 **285 用例全绿 / 6 跳过（共 291）**（2026-10-26 删 P7 的 56 条 VM 用例后）。
 
 | 组 | 文件（节选） | 覆盖 |
 |---|---|---|
 | Models | ModelTests / DataListVerbatim / FileNumberingServiceVerbatim / RecorderType / SlateLogItemSentinel | DataList 查重、文件号三前缀模式、枚举显式值与 JSON 短枚举名、Fake/Wild 哨兵逐字往返 |
 | Services | TakeFlowServiceTests + 13 个模块测试 | B1-B11 业务规则复刻锁定（首按不写/收工守卫/假拍延迟一拍）、备份/导出/CSV 解析/跨日回滚/MicObjects |
-| ViewModels | 9 个 VM 测试组 | 导航 Scoped 语义、Activate 水合 13 键、音量键行为、列联动、跨日重置、导出委托 |
+| Desktop 工作台 | Desktop/Workspace{Service,Editing,Backup,LegacyAndSafety,PhoneLayout,Ui}Tests | 记条/撤回/假条/命名、计划读写与守卫、旧会话迁移、按日导出、390×840 布局、音量键通道 |
 | Controls | ControlSurface / WheelSelectionLogic / SlideConfirmLogic / DialStatusPalette / FileNumberFormat / PaletteResourceKeys | 滚轮/滑条纯逻辑状态机、控件契约默认值、主题资源键存在性与前缀校验 |
 | RepositoryTests | LiteDB 仓储 + Seed + MockAsr | 保序往返、类型化设置、播种仅一次 |
 
-**TestDoubles**：`TestDoubles/TestDoubles.cs`（FakeTimeProvider 固定 2026-08-20、FakeLogRepository、FakePickerHistoryStore、FakeSessionSettingsStore、FakeSessionState）、`TestDoubles/ScheduleDoubles.cs`（MutableFakeTimeProvider 跨天、FakeScheduleStore）、`ViewModels/ViewModelTestDoubles.cs`（TestHardwareKeyService 手动 Raise、StubScheduleStore/CsvParser/Book、SpyExportService、ScheduleFactory）。
+**TestDoubles**：`TestDoubles/TestDoubles.cs`（FakeTimeProvider 固定 2026-08-20、FakeLogRepository、FakePickerHistoryStore、FakeSessionSettingsStore、FakeSessionState）、`TestDoubles/ScheduleDoubles.cs`（MutableFakeTimeProvider 跨天、FakeScheduleStore）（`ViewModels/ViewModelTestDoubles.cs` 已随 P7 的 VM 用例删除；音量键用例改用 `WorkspaceLegacyAndSafetyTests.cs` 内的 `FakeHardwareKeys`）。
 
 ## 11. 文档索引（新增开发前先读）
 
@@ -277,7 +273,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 - [ ] Android Manifest 主题保持 AppCompat 系列
 - [ ] 改界面只改 `Desktop/DesktopWorkspaceView.cs`（+ 4 个分部类）；窄屏改动后跑 `WorkspacePhoneLayoutTests`（390×840 下底部 Tab 必须 4 等分、高 ≥44、三页无控件越界）
 - [ ] 新增源文件放 src/VoiSlate 对应子目录（SDK glob 免改 csproj）；测试放 tests/VoiSlate.Tests 对应子目录，**只新增文件不改既有文件**
-- [ ] 桌面回归：`dotnet build` 0w/0e + `dotnet test` 341/347（6 跳过属正常）
+- [ ] 桌面回归：`dotnet build` 0w/0e + `dotnet test` 285/291（6 跳过属正常）
 - [ ] Android 改动 → 发 arm64 APK → 真机安装启动验证（崩溃查 logcat FATAL）
 
 ## 13. 当前状态里程碑
