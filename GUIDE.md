@@ -18,8 +18,8 @@ VoiSlate 是**声音场记无纸化工具**（拍板场记）：记录每一条�
 | 性质 | 从 Flutter 应用迁移重写的 Avalonia 桌面应用（**不运行原 Flutter 应用**，只做源码复刻，缺陷按 B1-B11 清单原样复刻并单测锁定） |
 | 技术栈 | .NET 10（SDK 10.0.400）+ Avalonia 12.1.1 + CommunityToolkit.Mvvm 8.4.2 + LiteDB 5.0.21 + CsvHelper 33 + Serilog + Microsoft.Extensions.DependencyInjection |
 | 目标平台 | 桌面 `net10.0`（✅ 主目标）+ Android `net10.0-android`（✅ 真机已验证，`a326284`） |
-| ASR/录音/震动/Toast | 接口先行，Mock 实现（`MockAsrService`/`NoopHapticsService`/`NoopToastService` 等） |
-| 测试 | 274 通过 / 6 跳过 / 280（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身；跳过的 6 条是 `WindowsOnlyFactAttribute`） |
+| ASR / 采集 / 震动 / 提示条 | 百炼实时 ASR（`BailianRealtimeClient`）+ 平台静态注册点（`PcmCapture` / `Haptics` / `HardwareKeys`）；提示条是 `DesktopWorkspaceView` 内联控件，**无第三方 toast 包** |
+| 测试 | 291 通过 / 1 跳过 / 292（xUnit，单测试项目 `tests/VoiSlate.Tests`，无 Moq 全手写替身；跳过的 6 条是 `WindowsOnlyFactAttribute`） |
 | 远程 | https://github.com/drunkenQCat/voislate-avalonia （main 分支） |
 
 ## 2. 目录地图
@@ -99,12 +99,11 @@ voislate-avalonia/
 | `RecordingSessionViewModel`（单例） | 同时注册为 `ISessionState`；实现 `Initialization` Task |
 | `ISessionSettingsStore / ILogRepository / IPickerHistoryStore / IScheduleBook` | LiteDB 实现 |
 | `ISeedService → SeedService`、`IAsrService → MockAsrService` | |
-| `IToastService → NoopToastService`、`IHapticsService → NoopHapticsService` | ⚠️ `Controls/ToastService.cs` 有真实现但**未注册** |
 | `ITakeFlowService → TakeFlowService`（单例，唯一持用 FileNumberingService） | 注入 8 项 + 3 个 Provider 委托（SceneLabel/ShotLabel/ObjectsOf，**硬编码取第 0 场第 0 镜** `book.X(0,0)`） |
 | `IHardwareKeyService → NoopHardwareKeyService`、`IExportService → ExportService`、`IScheduleStore → LiteDbScheduleStore`、`ICsvScheduleParser → CsvScheduleParserService` | ⚠️ NoopHardwareKeyService 只是占位：真实音量键走 `HardwareKeys.Current`（Android 在 `MainActivity.OnCreate` 注册） |
 | ~~`Func<RecordViewModel>` / 4 个页面 VM / `MainViewModel`~~ | **已删除**（2026-10-26）：界面与数据面统一由 `DesktopWorkspaceService` 承担 |
 
-**存在但未注册（要接线时从这里开始）**：`IDayRolloverService`、`IBackupService`、`IImportService`、`IRecordingService`、`IScheduleService`（已实现「至少 1 场 1 镜」守卫 / 任意索引 Move / 20 步整表 undo，可当参考实现）、`ToastService`（真 Toast 实现）。
+**存在但未注册（要接线时从这里开始）**：`IDayRolloverService`、`IBackupService`、`IImportService`、`IRecordingService`、`IScheduleService`（已实现「至少 1 场 1 镜」守卫 / 任意索引 Move / 20 步整表 undo，可当参考实现）。
 
 ## 6. 构建与运行命令
 
@@ -190,7 +189,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 
 **主题**（`Themes/`）：
 - `VoiSlatePalette.axaml` 契约必选键（**键名不得改**，PaletteResourceKeysTests 校验前缀 `VoiSlate.`）：`VoiSlate.Bg` / `VoiSlate.Primary`(#0067A0 bahamaBlue) / `VoiSlate.OkGreen` / `VoiSlate.BadRed` / `VoiSlate.NiceGold` / `VoiSlate.TextHint`；补充键（Wheel/Dial/Card 取色自原版）。
-- `Controls.axaml`：SlideConfirmBar/DialFAB/FileCounter/TagChips/ToastHost/LoadingOverlay 的默认样式模板（PART_* 命名，代码按名查找）。
+- `Controls.axaml`：SlideConfirmBar/DialFAB/FileCounter/TagChips/LoadingOverlay 的默认样式模板（PART_* 命名，代码按名查找）。
 
 **CI / 脚本**：`.github/workflows/ci.yml` 单 job（restore/build/test，仅 slnx，**不含 Android**）；`scripts/p2-merge.sh` P2 历史脚本（check + merge-a/e/d/b/c + verify）。
 
@@ -270,7 +269,6 @@ Flutter 原版用了两套东西，行为完全不同，迁移时不能合并成
 | `IFileNamingService` | `FileNumberingService` | 三前缀模式（yymmdd / yyYmMd / 自定义）+ 编号状态机 |
 | `ITimeProvider` | `SystemTimeProvider` | Today / TodayStamp / SoundDevicesStamp |
 | `IHardwareKeyService` | `NoopHardwareKeyService` | 音量键（Android 增强待做） |
-| `IToastService` / `IHapticsService` | `NoopToastService` / `NoopHapticsService` | Toast 真实现存在未注册 |
 | `MicObjectsExtractor` | 静态 | shtNote 麦克风对象协议 `<obj/>` 解析 |
 
 ### 9.2 ViewModels（仅 1 个：`RecordingSessionViewModel`）
@@ -286,7 +284,7 @@ Flutter 原版用了两套东西，行为完全不同，迁移时不能合并成
 | `SlideConfirmBar` + `SlideConfirmLogic` | 水平滑动确认条（红→绿、双备注 TwoWay、幂等提交） | RecordView |
 | `DialFAB` + `DialOption` + `DialStatusPalette` | 评价弹钮（声音可/弃、画面保/过，状态色回显） | RecordView ×2 |
 | `FileCounter` + `FileNumberFormat` | 文件号三卡片（前缀/链接符/编号，D3 补零） | RecordView |
-| `TagChips` / `ToastHost` + `ToastService` / `LoadingOverlay` | 标签流式排布 / 全局 Toast（未注册）/ 加载遮罩 | 各处 / 全局 / 全局 |
+| `TagChips` / `LoadingOverlay` | 标签流式排布 / 加载遮罩 | 各处 / 全局 |
 | `EditRequestedSection` / `SlideConfirmState` / `VoiSlatePalette` | 枚举与调色板类型 | — |
 
 ### 9.4 数据层（Infrastructure/LiteDbStore.cs，LiteDB 四集合）
@@ -300,7 +298,7 @@ Flutter 原版用了两套东西，行为完全不同，迁移时不能合并成
 
 `SeedData`：空库播种两份生产场表（dummy_data 语义）——1A「万星园」objects=[缪尔赛斯,塞雷娅,克里斯滕]、2A「洛肯实验室」objects=[Dr,凯尔希,迷迭香]，各 3 镜。`SlateLogItem` 有 BsonId `Id` 与 `[JsonIgnore]` 计算属性（FileName/Type）；导出经 `VoiSlateJson.Options`。
 
-**已实现但未接线（别误以为全局生效）**：`ToastHost`/`ToastService`（Toast 宿主与实现）、`TagChips`、`LoadingOverlay`——三个控件代码与样式齐全，但无任何 View 实例化、Toast 服务 DI 未注册；`IRecordingService`/`IDayRolloverService`/`IBackupService`/`IImportService`/`IScheduleService` 接口与实现齐全但均未注册，`BackupService` 等 IDisposable 周期任务在组合根里实际不会执行。
+**已实现但未接线（别误以为全局生效）**：`TagChips`、`LoadingOverlay`——控件代码与样式齐全，但无任何 View 实例化（提示条不走它们：`Controls/ToastHost`、`ToastService`、`IToastService` 已于 2026-10-27 删除，唯一实现是 `DesktopWorkspaceView.Toast(...)`）；`IRecordingService`/`IDayRolloverService`/`IBackupService`/`IImportService`/`IScheduleService` 接口与实现齐全但均未注册，`BackupService` 等 IDisposable 周期任务在组合根里实际不会执行。
 
 ## 10. 测试矩阵（tests/VoiSlate.Tests，xUnit，无 Moq 全手写 Fake/Stub/Spy）
 

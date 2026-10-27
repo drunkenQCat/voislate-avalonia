@@ -127,24 +127,6 @@
     </Setter>
   </Style>
 
-  <!-- ============ ToastHost（全局底部 Toast） ============ -->
-
-  <Style Selector="controls|ToastHost">
-    <Setter Property="Template">
-      <Setter.Value>
-        <ControlTemplate TargetType="controls:ToastHost">
-          <Grid>
-            <Border x:Name="PART_Toast" IsVisible="False" Opacity="0"
-                    Background="#E6000000" CornerRadius="18" Padding="14,8"
-                    HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24">
-              <TextBlock x:Name="PART_ToastText" Foreground="White" FontSize="14" />
-            </Border>
-          </Grid>
-        </ControlTemplate>
-      </Setter.Value>
-    </Setter>
-  </Style>
-
   <!-- ============ LoadingOverlay（加载覆盖层） ============ -->
 
   <Style Selector="controls|LoadingOverlay">

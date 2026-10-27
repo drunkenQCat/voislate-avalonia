@@ -158,27 +158,4 @@ public class ControlSurfaceTests
         Assert.Equal("👍", option.Icon);
         Assert.Equal(ShtStatus.Nice, option.EnumValue);
     }
-
-    // ---- ToastService ----
-
-    [Fact]
-    public void ToastService_CurrentMessage_RaisesPropertyChanged()
-    {
-        var service = new ToastService();
-        var changed = new List<string?>();
-        ((INotifyPropertyChanged)service).PropertyChanged += (_, e) => changed.Add(e.PropertyName);
-
-        service.CurrentMessage = "hello";
-        service.CurrentMessage = null;
-
-        Assert.Contains(nameof(ToastService.CurrentMessage), changed);
-        Assert.Null(service.CurrentMessage);
-    }
-
-    [Fact]
-    public void ToastHost_Defaults_MatchContract()
-    {
-        var host = new ToastHost();
-        Assert.Null(host.Message);
-    }
 }

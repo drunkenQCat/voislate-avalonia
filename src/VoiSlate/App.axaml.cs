@@ -158,7 +158,6 @@ public partial class App : Application
         services.AddSingleton<IPickerHistoryStore, LiteDbPickerHistoryStore>();
         services.AddSingleton<ISeedService, SeedService>();
         services.AddSingleton<IAsrService, MockAsrService>();
-        services.AddSingleton<IToastService, NoopToastService>();
 
         // 已删除 legacy 写入器链路（2026-10-26）：IScheduleBook/LiteDbScheduleBook 与
         // ITakeFlowService/TakeFlowService 都不再有消费者 —— 桌面与 Android 的记录数据面统一由

@@ -86,7 +86,6 @@ public class PaletteResourceKeysTests
                      "controls|DialFAB",
                      "controls|FileCounter",
                      "controls|TagChips",
-                     "controls|ToastHost",
                      "controls|LoadingOverlay",
                  })
         {

@@ -43,7 +43,7 @@
 | `MicObjectsExtractor` | `static (string Body, IReadOnlyList<string> Tracks) Extract(string shtNote)` | 协议 `<obj/>` |
 | `IBackupService` | `Task BackupAsync(CancellationToken)`, 启动 3 分钟 PeriodicTimer + 退出前 + 手动 | JSON `Documents/VoiSlate Logs/slate_backup{yymmdd}-{hour}clock.json` |
 | `ITimeProvider` | `DateTime Today`, `string TodayStamp`(yymmdd), `string SoundDevicesStamp`(yyYmMd) | 可注入固定时间 |
-| `IToastService` | `void Show(string message)` | ToastHost 实现 |
+| ~~`IToastService`~~ | `void Show(string message)` | **已删除（2026-10-27）**：提示条改为 `DesktopWorkspaceView.Toast(msg, tone, seconds, action, onAction, onExpire)`，带动作/过期语义，见 `GUIDE.md` §8 |
 | `IHapticsService` | `void Pulse(int durationMs, int amplitude = 128)` | no-op |
 | `IHardwareKeyService` | `event Action<HardwareKey>? KeyPressed`；`enum HardwareKey { VolumeUp, VolumeDown }`；仅记录页激活时订阅 | 桌面 no-op；Android 增强后续 |
 | `IDayRolloverService` | `bool IsNewDay()`, `void OnStartup()`, 定时检测（PeriodicTimer 1min 起） | 跨天：recordCount=1 + 清 history + 日期登记 |
@@ -79,7 +79,7 @@
 | `DialFAB`（×2 实例） | `Options: IReadOnlyList<DialOption>`、`SelectedOption`(TwoWay) | `SelectionChanged(DialOption)`、`Opened/Closed` | `DialOption`（D 产出，仅显示数据：`Label/Icon/EnumValue: object`）；实例1：声音可(ok)/声音弃(bad)；实例2：画面保(ok)/画面过(nice)；选中后**背景色/图标随状态回显**（NotChecked=浅色/Ok=绿/Bad=红/Nice=金黄）；展开点外部关闭；接线 `SetOkTake/SetOkShot/ResetOkStatus` |
 | `FileCounter` | `Prefix`/`Linker`/`NumberText`(string, TwoWay)、`NumberValue`(int 只读) | `EditRequested(EditRequestedSection)` | `EditRequestedSection { Prefix, Linker, Number }`（D 产出）；编辑对话框：Prefix=三模式 Toggle(Date/Sound Devices/Custom)+custom 文本；Linker=文本；Number=整型（不输入 0，显示 D3 补零）；**B7 三向同步归属 ITakeFlowService（BLOCKER-1 修正）**：RecordCount 经 AdvanceTake/FileNumberChanged 双向同步；编辑文件号经 `SetFileNumberAsync/SetLinkerAsync/SetPrefixAsync`（服务内 FileNumberingService 改值 → ISessionSettingsStore 持久化 → FileNumberChanged 通知）；RecordViewModel 不直改文件号 |
 | `TagChips` | `Tags: IReadOnlyList<string>` | `AddRequested/EditRequested(string)/DeleteRequested(string)` | 流式排列；Add/Edit 共用编辑对话框（TagEditingMessage 语义） |
-| `ToastHost` | `Message`(OneWay) | — | 全局底部 Toast；IToastService 实现 |
+| ~~`ToastHost`~~ | `Message`(OneWay) | — | **已删除（2026-10-27）**：与 `DesktopWorkspaceView` 的内联提示条重复 |
 | `LoadingOverlay` | `IsActive`(OneWay) | — | 全局覆盖层 |
 
 ## 6. 页面与导航契约（Agent C 产出）
