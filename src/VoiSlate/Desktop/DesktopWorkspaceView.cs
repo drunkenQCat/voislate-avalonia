@@ -399,9 +399,10 @@ public sealed partial class DesktopWorkspaceView : UserControl
     private Control PageHeader(string eyebrow, string title, params Control[] actions)
     {
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        grid.Children.Add(Stack(4, T(eyebrow, 10, "#84988A"), T(title, 25, "#28483B", true)));
+        // 窄屏页头收矮：手机 361dp 上每 10dp 都要让给标注框
+        grid.Children.Add(Stack(_compact ? 1 : 4, T(eyebrow, _compact ? 9 : 10, "#84988A"), T(title, _compact ? 20 : 25, "#28483B", true)));
         var tools = Row(6, actions); tools.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(tools, 1); grid.Children.Add(tools);
-        return Box(grid, "#FCFDFB", 20, radius: 0);
+        return Box(grid, "#FCFDFB", _compact ? 10 : 20, radius: 0);
     }
     private Control Footer(string cross, string page)
     {
@@ -415,10 +416,17 @@ public sealed partial class DesktopWorkspaceView : UserControl
     {
         var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto") };
         grid.Children.Add(PageHeader("VOISLATE / ON SET", "当前记录", B("⚙", ShowSettings, "quiet", "open-settings")));
-        var project = B($"▧  {_service.State.Project}   ·   完成 {DoneCount} / {ShotCount} 镜   ↗", () => Navigate("plan"), "quiet");
-        project.HorizontalAlignment = HorizontalAlignment.Stretch; Grid.SetRow(project, 1); grid.Children.Add(project);
+        // 工程条与「拍摄计划」入口合成一行：原本是上下两行（工程条 + 计划折叠按钮），
+        // 在 361dp 上白吃 40dp，而标注框正是缺这 40dp。
+        var entryLine = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
+        entryLine.Children.Add(T($"▧  {_service.State.Project}   ·   完成 {DoneCount} / {ShotCount} 镜", _compact ? 11 : 12, "#5C7566"));
+        var planHint = T("⌃  拍摄计划  ↗", _compact ? 11 : 12, "#5C7566");
+        planHint.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(planHint, 1); entryLine.Children.Add(planHint);
+        var project = B("", () => Navigate("plan"), "quiet", "open-plan");
+        project.Content = Box(entryLine, "#FCFDFB", _compact ? 7 : 9, radius: 0);
+        project.Padding = new Thickness(0); project.HorizontalAlignment = HorizontalAlignment.Stretch; project.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        Grid.SetRow(project, 1); grid.Children.Add(project);
         var d = _service.Draft; var panel = Stack(_compact ? 10 : 14); panel.MaxWidth = 470; panel.Margin = PagePad(20, 12);
-        panel.Children.Add(B("⌃  拍摄计划", () => Navigate("plan"), "quiet", "open-plan"));
         var card = Stack(16);
         var title = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         title.Children.Add(T(d.Ended ? "本镜最后一条 · 已保存" : "当前待记条", 11, "#7F8069"));
@@ -460,13 +468,13 @@ public sealed partial class DesktopWorkspaceView : UserControl
         {
             Text = d.RecordingNote, PlaceholderText = "录音标注…", IsReadOnly = d.Ended,
             AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalContentAlignment = VerticalAlignment.Top,
-            MinHeight = _compact ? 62 : 64,
+            MinHeight = _compact ? 92 : 74,
         };
         _shotNote = new TextBox
         {
             Text = d.ShotNote, PlaceholderText = "镜头标注…", IsReadOnly = d.Ended,
             AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalContentAlignment = VerticalAlignment.Top,
-            MinHeight = _compact ? 62 : 64,
+            MinHeight = _compact ? 92 : 74,
         };
         AutomationProperties.SetAutomationId(_recNote, "recording-note"); AutomationProperties.SetName(_recNote,"录音标注");
         AutomationProperties.SetAutomationId(_shotNote, "shot-note"); AutomationProperties.SetName(_shotNote,"镜头标注");
