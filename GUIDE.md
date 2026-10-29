@@ -250,7 +250,10 @@ Flutter 原版用了两套东西，行为完全不同，迁移时不能合并成
 - `BuildRecord()` 的 `Grid` 行是 `Auto(页头) / Auto(工程条) / *(滚动区) / Auto(语音底栏) / Auto(脚注)`；滚动区里只有拍摄计划入口、数字卡、`录音标注`、`镜头标注`、`场记时间轴` 按钮。
 - **底栏 = `voiceStatus` + `hotzone`**（撤回 / 摇杆 / 下一场），带 1px 上分隔线。理由：主控（按住说话、记一条、撤回）一旦被滚出屏幕，现场就没法操作；Flutter 原版也是把这一排固定在 `BottomNavigationBar` 之上。
 - **语音状态行 14pt、居中、`MinHeight = 40`（两行）**：它是小屏上语音反馈的唯一出口（`正在连接百炼…` → `正在聆听…` → 实时部分转写 → `已写入录音标注`）。11pt 在 361dp 上太小、正文下面原先那行 10pt 提示与它重复，已删掉（`DesktopWorkspaceView.cs` 旧 `按住语音摇杆 · 左滑…` 那行）。
-- `_compact` 下数字卡同时收窄：数字 38→31（超 3 字符 29→24）、卡片内边距 12→7、`card` 容器 18→12，否则滚动区只剩半张卡、连 `录音标注` 输入框都被底栏压掉一半。
+- `_compact` 下数字卡同时收窄：数字 38→31（超 3 字符 29→24）、卡片内边距 12→7、`card` 容器 18→12，否则滚动区只剩半张卡。
+- **两个标注框照 Flutter 原版做**（`voislate-repo/lib/pages/record_page.dart:632-651` → `widgets/record_page/prev_note_editor.dart` 的 `PrevTakeEditor` / `PrevShotNote`）：并排两个方框、`maxLines: 3` 的行高、描边、**每个框上方一行标题**——左「● 正在录制 <文件号>」、右「S<场> · Sh<镜> · Tk <次> ●」（原版左标题是红点 + `正在录制:T{prev}`，右标题是 `S{scn} Sh{sht} Tk` + 绿色 `movie_creation` 图标，OK 时 Take 号带绿底；我方用彩色圆点代替 Material 图标）。之前是两条通栏单行 `TextBox`，既分不清左右又没有标题。
+- 底栏自下而上是「两个标注框 → 语音状态行 → 撤回/摇杆/下一场」，随 `_recNote`/`_shotNote` 的 AutomationId 保持不变（`recording-note`/`shot-note`），原有 UI 用例无需改。
+- 原先底栏下面还有一行 10pt 的「本机自动保存 · 百炼实时语音标注」，已删：底栏状态行与自动落库已经表达了同样的信息，留着只会把滚动区再挤掉 30px（改前「场记时间轴」按钮正好被切掉一半）。
 - 截图对照：`shots/voice-dock-narrow.png`（390×840 headless）、`shots/device-voice-dock.png`（RMX5060，1264×2780 @560dpi）。
 
 #### 语音采集停止（Android）

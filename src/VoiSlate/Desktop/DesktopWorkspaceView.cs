@@ -413,11 +413,11 @@ public sealed partial class DesktopWorkspaceView : UserControl
     }
     private Control BuildRecord()
     {
-        var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto") };
+        var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto") };
         grid.Children.Add(PageHeader("VOISLATE / ON SET", "当前记录", B("⚙", ShowSettings, "quiet", "open-settings")));
         var project = B($"▧  {_service.State.Project}   ·   完成 {DoneCount} / {ShotCount} 镜   ↗", () => Navigate("plan"), "quiet");
         project.HorizontalAlignment = HorizontalAlignment.Stretch; Grid.SetRow(project, 1); grid.Children.Add(project);
-        var d = _service.Draft; var panel = Stack(14); panel.MaxWidth = 470; panel.Margin = PagePad(20, 20);
+        var d = _service.Draft; var panel = Stack(14); panel.MaxWidth = 470; panel.Margin = PagePad(20, 12);
         panel.Children.Add(B("⌃  拍摄计划", () => Navigate("plan"), "quiet", "open-plan"));
         var card = Stack(16);
         var title = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -452,19 +452,37 @@ public sealed partial class DesktopWorkspaceView : UserControl
         // 手机 361dp：卡片内边距与数字卡高度都要收，否则滚动区只剩半张卡，
         // 连「录音标注」输入框都被底部固定栏压掉一半。
         panel.Children.Add(Box(card, "#FFFDF5", _compact ? 12 : 18, "#E4E3D5", 18));
-        _recNote = new TextBox { Text = d.RecordingNote, PlaceholderText = "◉  录音标注…", IsReadOnly = d.Ended };
-        _shotNote = new TextBox { Text = d.ShotNote, PlaceholderText = "▧  镜头标注…", IsReadOnly = d.Ended };
+        // 两个标注框照 Flutter 原版做（record_page.dart:632-651 → PrevTakeEditor/PrevShotNote）：
+        // 并排两个方框、各自标题在上方，`maxLines: 3` 三行高度、带描边。
+        // 之前是两条通栏单行输入框，既看不出哪条是哪条、又只能写一行。
+        var takeLabel = d.Ended ? "OK" : _service.State.Linked ? d.Take.ToString() : "补录";
+        _recNote = new TextBox
+        {
+            Text = d.RecordingNote, PlaceholderText = "录音标注…", IsReadOnly = d.Ended,
+            AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalContentAlignment = VerticalAlignment.Top,
+            MinHeight = _compact ? 62 : 64,
+        };
+        _shotNote = new TextBox
+        {
+            Text = d.ShotNote, PlaceholderText = "镜头标注…", IsReadOnly = d.Ended,
+            AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalContentAlignment = VerticalAlignment.Top,
+            MinHeight = _compact ? 62 : 64,
+        };
         AutomationProperties.SetAutomationId(_recNote, "recording-note"); AutomationProperties.SetName(_recNote,"录音标注");
         AutomationProperties.SetAutomationId(_shotNote, "shot-note"); AutomationProperties.SetName(_shotNote,"镜头标注");
         _recNote.TextChanged += NotesChanged; _shotNote.TextChanged += NotesChanged;
-        panel.Children.Add(_recNote);
+        var recTitle = Row(4, T("●", 10, "#D64A4A"), T("正在录制 " + (_service.State.Linked ? _service.CurrentFile : "补录 T" + d.RetakeIndex), 11, "#7C8A80"));
+        var shotTitle = Row(4, T($"S{_service.State.Scene} · Sh{_service.State.Shot} · Tk ", 11, "#7C8A80"), T(takeLabel, 11, d.Ended ? "#5C8A54" : "#7C8A80"), T("●", 10, "#5C8A54"));
+        var noteRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 10 };
+        noteRow.Children.Add(Stack(4, recTitle, _recNote));
+        var right = Stack(4, shotTitle, _shotNote); Grid.SetColumn(right, 1); noteRow.Children.Add(right);
         var undo = B("↶\n撤回", AskUndo, "quiet", "undo-take"); undo.IsEnabled = _service.CanUndo;
         var add = B(_service.State.PocketLock ? "＋\n长按记条" : "＋\n下一条", () =>
         {
             if (_service.State.PocketLock) { if (!_held) Toast("口袋锁已开，请按住 650 毫秒"); }
             else SaveTake(success: "当前条已保存，可撤回修改");
         }, "purple", "add-take");
-        add.Width = 92; add.Height = 82; add.CornerRadius = new CornerRadius(40); add.IsEnabled = _service.Shot is not null && !d.Ended;
+        add.Width = 96; add.Height = 82; add.CornerRadius = new CornerRadius(40); add.Padding = new Thickness(0); add.IsEnabled = _service.Shot is not null && !d.Ended;
         Point holdFrom = default;
         add.AddHandler(InputElement.PointerPressedEvent, (_, e) => { if (e.Pointer.Type == PointerType.Mouse && !e.GetCurrentPoint(add).Properties.IsLeftButtonPressed) return; _held = false; holdFrom = e.GetPosition(add); if (_service.State.PocketLock) { _holding = true; _hold.Start(); } }, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
         // 触屏：长按期间手指滑出 10px 视为滚动而非长按（手机上按住再拖是滚页面的常见手势）
@@ -473,29 +491,29 @@ public sealed partial class DesktopWorkspaceView : UserControl
         add.PointerExited += (_, _) => { _holding = false; _hold.Stop(); };
         add.AddHandler(InputElement.KeyDownEvent, (_, e) => { if (_service.State.PocketLock && e.KeyModifiers == KeyModifiers.None && e.Key is Key.Space or Key.Enter) { e.Handled = true; if (!_holding) { _held = false; _holding = true; _hold.Start(); } } }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         add.AddHandler(InputElement.KeyUpEvent, (_, e) => { if (_service.State.PocketLock && e.Key is Key.Space or Key.Enter) { e.Handled = true; _holding = false; _hold.Stop(); } }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        var hotzone = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 12, Margin = new Thickness(0, 3) };
+        var hotzone = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 12, Margin = new Thickness(0, 2) };
         hotzone.Children.Add(undo);
         var (voice, voiceStatus) = BuildVoice();
         Grid.SetColumn(voice, 1); hotzone.Children.Add(voice); Grid.SetColumn(add, 2); hotzone.Children.Add(add);
         if (_service.State.LeftHanded) { Grid.SetColumn(add, 0); Grid.SetColumn(undo, 2); }
-        panel.Children.Add(_shotNote);
         panel.Children.Add(B("⌄  场记时间轴", () => { _scopeScene = _scopeShot = null; Navigate("log"); }, "quiet", "open-timeline"));
         if (!_service.State.Linked) panel.Children.Add(T("补录模式 · 次号冻结，文件号继续前进", 11, "#9875A3"));
         var scroll = new ScrollViewer { Content = panel, HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center };
         _recordScroll = scroll;
         Grid.SetRow(scroll, 2); grid.Children.Add(scroll);
-        // 语音状态行 + 记条/撤回/摇杆那一排做成**固定底栏**：
-        // 手机 361dp 上记录页内容本来就超一屏，主控（按住说话、记一条、撤回）
-        // 一旦滚出屏幕就没法用了；固定在底部后滚动区只剩卡片和两个标注框。
-        var dockInner = Stack(4, voiceStatus, hotzone); dockInner.MaxWidth = 470; dockInner.Margin = PagePad(20, 6);
+        // 底栏 = 两个标注框 + 语音状态行 + 记条/撤回/摇杆那一排：
+        // 手机 361dp 上记录页内容本来就超一屏，主控（标注、按住说话、记一条、撤回）
+        // 一旦滚出屏幕就没法用了；滚动区只剩数字卡与时间轴入口。
+        var dockInner = Stack(4, noteRow, voiceStatus, hotzone); dockInner.MaxWidth = 470; dockInner.Margin = PagePad(20, 6);
         var dock = new Border
         {
             Child = dockInner, Background = Brush("#F3F6F3"),
             BorderBrush = Brush("#E1E7E1"), BorderThickness = new Thickness(0, 1, 0, 0),
         };
         Grid.SetRow(dock, 3); grid.Children.Add(dock);
-        var caption = T("本机自动保存  ·  百炼实时语音标注", 10, "#96A397"); caption.Margin = new Thickness(20, 10); caption.HorizontalAlignment = HorizontalAlignment.Center;
-        Grid.SetRow(caption, 4); grid.Children.Add(caption); return grid;
+        // 「本机自动保存 · 百炼实时语音标注」那行说明撤掉了：底栏已经把两者都表达了
+        // 一遍（状态行显示识别状态、记录页本身即时落库），留着只会把滚动区再挤掉 30px。
+        return grid;
     }
     private async void NotesChanged(object? sender, TextChangedEventArgs e)
     {
