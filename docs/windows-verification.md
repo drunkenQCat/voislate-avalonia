@@ -15,7 +15,7 @@
 - 正常点击窗口关闭后生成 `VoiSlate-20261024-154127-8653209-exit-06649bed.json`，进程正常结束。读取验证一条场记、下一文件号 2、正确轨道及标注，随后重启窗口复核。
 - 之前的三分钟自动备份已在同一隔离目录观察到。
 
-上述原生数据均位于 `artifacts/ui-bailian`，没有清空默认数据库。原生截图为 `docs/screenshots/windows-bailian-*.png`；`rendered-*.png` 是单独的 Skia 离屏测试图。
+上述原生数据均位于 `artifacts/ui-bailian`，没有清空默认数据库。原生截图为 `temp/screenshots/windows-bailian-*.png`（本机临时目录，不入库）；`rendered-*.png` 是单独的 Skia 离屏测试图。
 
 ## 剩余验收
 

@@ -9,7 +9,7 @@ using Xunit;
 namespace VoiSlate.Tests.Desktop;
 
 /// <summary>
-/// P7 遗留缺口收口（docs/p7-vm-coverage.md 阶段 1+2）：旧会话迁移、记条备注不串味、
+/// P7 遗留缺口收口（temp/p7-vm-coverage.md 阶段 1+2，本机临时目录）：旧会话迁移、记条备注不串味、
 /// 计划删除守卫、撤回栈不再被计划操作清空、按日导出、音量键通道。
 /// </summary>
 public sealed partial class DesktopWorkspaceTests

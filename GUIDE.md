@@ -151,7 +151,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 6. **Avalonia.Diagnostics 版本滞后**：11.x 与 Avalonia 12.1.1 不配套，暂未引入（csproj 注释说明）。
 7. **已收口的业务缺口（2026-10-26 更新，勿再按旧文档排查）**：
    - 导出：工作台的「导出 JSON」走 `DesktopWorkspaceBackup.ExportFlutterJson()`，选定日期时走 `ExportDayJson(date)`（Flutter 兼容字段，camelCase、非 ASCII 转义）；老 `ExportService.SaveToFileAsync("")` 那条空目录路径已不参与 UI。
-   - `LiteDbScheduleBook` / `IScheduleBook` / `ITakeFlowService` / `TakeFlowService` **已删除**（`docs/p7-vm-coverage.md` §11），计划读写只剩 `LiteDbScheduleStore`，场记写入只剩 `DesktopWorkspaceService`；`SceneScheduleDoc` 已独立成 `Services/SceneScheduleDoc.cs`。
+   - `LiteDbScheduleBook` / `IScheduleBook` / `ITakeFlowService` / `TakeFlowService` **已删除**（`temp/p7-vm-coverage.md` §11，本机临时目录），计划读写只剩 `LiteDbScheduleStore`，场记写入只剩 `DesktopWorkspaceService`；`SceneScheduleDoc` 已独立成 `Services/SceneScheduleDoc.cs`。
    - 仍存疑的只有 `IScheduleStore` 的读取顺序（旧实现按 Key 字符串排，"10A" < "2A"），改计划排序前先写用例钉住期望。
 8. **存储线程安全**：LiteDB 线程安全注意点（ADR-001 风险 CR3）。
 
@@ -168,7 +168,7 @@ adb logcat -d | grep -aE "FATAL|AndroidRuntime"   # 崩溃必查
 - 页面切换 = `Navigate(key)`（把 key 归一为小写后置 `_page` 再 `Render()`）；键盘 `HandleShortcut`（Ctrl+1/2/3、Ctrl+Shift+Z、Ctrl+Enter、Esc）由薄壳 Window 以 Tunnel 方式转交，Android 无键盘路径。
 - 窄屏留白统一走 `PagePad(horizontal, vertical)`（compact 时夹到 14/12）。
 
-**P7 遗留缺口收口（2026-10-26，`docs/p7-vm-coverage.md` §8）**——删 P7 ViewModel 前补齐的现场能力，改这几处前先看该文档的回归用例表：
+**P7 遗留缺口收口（2026-10-26，`temp/p7-vm-coverage.md` §8，本机临时目录）**——删 P7 ViewModel 前补齐的现场能力，改这几处前先看该文档的回归用例表：
 - 音量键：`Services/HardwareKeys.cs` 的**静态事件** `HardwareKeys.Pressed`（`Raise/HasHandlers`）← `src/VoiSlate.Android/AndroidHardwareKeyService.cs` 映射 `Keycode` 后 `Raise`，由 `MainActivity.DispatchKeyEvent` 消费（**不是 `OnKeyDown`**：Avalonia 的 Android 视图会先吃按键）；上键记条、下键撤回，仅记录页且 `_busy=false`。视图侧订阅在 `DesktopWorkspaceView` ctor，`DetachedFromVisualTree` 解绑。
 - 旧会话迁移：`Desktop/DesktopWorkspaceLegacy.cs` 的 `AdoptLegacySessionAsync()` 把老 `settings` 集合的 `project` 键 + `SessionKeys` 13 键一次性并入 `WorkspaceSession`；命名非法时保留默认而不阻塞启动。
 - 按日导出：`DesktopWorkspaceBackup.ExportDayJson(date)` / `DayCount(date)`；时间轴表头按钮在选定日期时变「导出当日」。
@@ -286,7 +286,7 @@ Flutter 原版用了两套东西，行为完全不同，迁移时不能合并成
 
 ### 9.2 ViewModels（仅 1 个：`RecordingSessionViewModel`）
 
-> 2026-10-26：P7 的 9 个页面 VM（Main/Record/Schedule/Settings/SlateLog/SlateLogPage/SlateColumn/LogEditor/Placeholder）已整批删除，其能力要么迁移进 `Desktop/DesktopWorkspace*`、要么判定为审计误报，逐条记录在 [docs/p7-vm-coverage.md](docs/p7-vm-coverage.md) §8。**新功能不要再往 ViewModel 层加**。
+> 2026-10-26：P7 的 9 个页面 VM（Main/Record/Schedule/Settings/SlateLog/SlateLogPage/SlateColumn/LogEditor/Placeholder）已整批删除，其能力要么迁移进 `Desktop/DesktopWorkspace*`、要么判定为审计误报，逐条记录在 `temp/p7-vm-coverage.md` §8（本机临时目录，不入库）。**新功能不要再往 ViewModel 层加**。
 - `RecordingSessionViewModel`：**实现 ISessionState**（Scene/Shot/TakeIndex + TakeCount=200 + SessionChanged），13 个 ObservableProperty 即时持久化到 ISessionSettingsStore；`Initialization` Task；Select{Scene,Shot,Take}/SetLink/SetOk{Take,Shot} 等。
 
 ### 9.3 Controls（16 个文件；控件代码 + 纯逻辑分离，逻辑可单测）

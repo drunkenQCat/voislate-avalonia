@@ -161,7 +161,7 @@ public partial class App : Application
 
         // 已删除 legacy 写入器链路（2026-10-26）：IScheduleBook/LiteDbScheduleBook 与
         // ITakeFlowService/TakeFlowService 都不再有消费者 —— 桌面与 Android 的记录数据面统一由
-        // DesktopWorkspaceService + ILogRepository 承担。裁定记录见 docs/p7-vm-coverage.md §11。
+        // DesktopWorkspaceService + ILogRepository 承担。裁定记录见 temp/p7-vm-coverage.md §11（本机临时目录，不入库）。
         // ==== 集成接线（C 合入后按 B 真实 VM 构造器重写；新增缺补服务生产实现）====
         services.AddSingleton<IExportService, ExportService>();
         // 计划页数据面：真实实现（LiteDb 落库 + SeedData 播种：1A 万星园 / 2A 洛肯实验室）。
@@ -172,7 +172,7 @@ public partial class App : Application
         // P7 页面 ViewModel（Record/Schedule/SlateLog/SlateLogPage/Settings/Main/LogEditor/SlateColumn/Placeholder）
         // 已于 2026-10-26 整批删除：桌面与 Android 共用 Desktop/DesktopWorkspaceView，数据面由
         // DesktopWorkspaceService（+ Editing/Backup/Speech/Preferences/Legacy 分部类）承担。
-        // 删除前的能力对照与迁移记录见 docs/p7-vm-coverage.md。
+        // 删除前的能力对照与迁移记录见 temp/p7-vm-coverage.md（本机临时目录，不入库）。
     }
 
     private void OnShutdown()

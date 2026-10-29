@@ -7,3 +7,5 @@ artifacts/
 *.suo
 .DS_Store
 /*.log
+# 临时材料：证据截图、审计报告、原型稿，不入库
+temp/

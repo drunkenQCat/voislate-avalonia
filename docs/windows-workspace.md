@@ -71,9 +71,9 @@ $env:VOISLATE_RENDER_DIR = "$PWD/artifacts/rendered-ui"
 dotnet test tests/VoiSlate.Tests/VoiSlate.Tests.csproj --filter 'FullyQualifiedName~DesktopWorkspaceTests.Ui_'
 ```
 
-已人工查看设置、录音页、500px 窄布局、计划、计划编辑操作和时间轴的离屏图，见 `docs/screenshots/rendered-*.png`。这些是离屏渲染图，不是原生窗口截图。
+已人工查看设置、录音页、500px 窄布局、计划、计划编辑操作和时间轴的离屏图，见 `temp/screenshots/rendered-*.png`（本机临时目录，不入库）。这些是离屏渲染图，不是原生窗口截图。
 
-Release 发布成功。已完成真实 Windows 窗口的视觉和主要操作验收：百炼设置与实际麦克风列表、空 Token 的测试连接 / 语音提示、语音设置保存反馈、设置滚动、立即备份、记条推进、计划进度 / 历史联动、计划编辑操作布局、时间轴回读、历史轨道修改，以及正常退出备份和重启持久化。截图见 `docs/screenshots/windows-bailian-*.png`。
+Release 发布成功。已完成真实 Windows 窗口的视觉和主要操作验收：百炼设置与实际麦克风列表、空 Token 的测试连接 / 语音提示、语音设置保存反馈、设置滚动、立即备份、记条推进、计划进度 / 历史联动、计划编辑操作布局、时间轴回读、历史轨道修改，以及正常退出备份和重启持久化。截图见 `temp/screenshots/windows-bailian-*.png`（本机临时目录，不入库）。
 
 验收使用隔离数据库 `artifacts/ui-bailian`。手动备份及退出备份已检查为 v2，退出备份保留一条原生验收场记、Boom / 演员甲轨道及下一文件号 2；重启后在真实窗口再次确认。三分钟自动备份文件也已在运行时观察到。具体证据与剩余验收见 [windows-verification.md](windows-verification.md)。
 
