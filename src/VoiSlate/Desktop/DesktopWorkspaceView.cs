@@ -794,7 +794,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
                     await _service.DeletePlanItemAsync(ownerScene, shotName);
                     Toast($"第 {name} {(isScene ? "场" : "镜")}已删除", ToastTone.Info, 5, "恢复",
                         () => Run(() => _service.RestorePlanItemAsync(), "计划条目已恢复"),
-                        () => { _service.DiscardRestore(); RenderPlanContents(); });   // 窗口过去 = 恢复点作废，和原版一致
+                        () => { _service.DiscardRestore(); if (_page == "plan") RenderPlanContents(); });   // 窗口过去 = 恢复点作废，和原版一致（已翻页时不必重画计划页）
                 });
             }, "danger"));
         }
