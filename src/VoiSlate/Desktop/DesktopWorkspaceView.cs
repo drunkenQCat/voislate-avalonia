@@ -417,7 +417,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
         grid.Children.Add(PageHeader("VOISLATE / ON SET", "当前记录", B("⚙", ShowSettings, "quiet", "open-settings")));
         var project = B($"▧  {_service.State.Project}   ·   完成 {DoneCount} / {ShotCount} 镜   ↗", () => Navigate("plan"), "quiet");
         project.HorizontalAlignment = HorizontalAlignment.Stretch; Grid.SetRow(project, 1); grid.Children.Add(project);
-        var d = _service.Draft; var panel = Stack(14); panel.MaxWidth = 470; panel.Margin = PagePad(20, 12);
+        var d = _service.Draft; var panel = Stack(_compact ? 10 : 14); panel.MaxWidth = 470; panel.Margin = PagePad(20, 12);
         panel.Children.Add(B("⌃  拍摄计划", () => Navigate("plan"), "quiet", "open-plan"));
         var card = Stack(16);
         var title = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -451,7 +451,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
         if (d.Ended) card.Children.Add(B("✓ 本镜已保存并结束    下一镜 →", () => Run(async () => { try { await _service.NextShotAsync(); } catch (InvalidOperationException) { Navigate("plan"); Toast("已到计划末尾，可添加或选择镜头"); } }), "primary", "next-shot"));
         // 手机 361dp：卡片内边距与数字卡高度都要收，否则滚动区只剩半张卡，
         // 连「录音标注」输入框都被底部固定栏压掉一半。
-        panel.Children.Add(Box(card, "#FFFDF5", _compact ? 12 : 18, "#E4E3D5", 18));
+        panel.Children.Add(Box(card, "#FFFDF5", _compact ? 10 : 18, "#E4E3D5", 18));
         // 两个标注框照 Flutter 原版做（record_page.dart:632-651 → PrevTakeEditor/PrevShotNote）：
         // 并排两个方框、各自标题在上方，`maxLines: 3` 三行高度、带描边。
         // 之前是两条通栏单行输入框，既看不出哪条是哪条、又只能写一行。
