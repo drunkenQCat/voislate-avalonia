@@ -79,12 +79,17 @@ public sealed partial class DesktopWorkspaceView
             if (_joyRelease is not null) _ = _joyRelease();
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
     }
-    private Control BuildVoice()
+    private (Control Joystick, Control Status) BuildVoice()
     {
         var preview = T(_voiceCaptureAvailable
             ? "按住话筒，左滑录音标注 / 右滑镜头标注，松手提交"
-            : "语音标注需要本机麦克风采集，本平台暂未接入；可直接在下面两个输入框手动记录", 11, "#83919C");
+            : "本平台暂未接入麦克风采集；可直接手动填写下方两个标注", 14, "#6B7A85");
         AutomationProperties.SetAutomationId(preview, "voice-preview");
+        // 状态行是小屏上读语音反馈的唯一位置：14pt、居中、固定两行高度，
+        // 避免文案在「一行 / 两行」之间切换时把上面的摇杆顶上顶下。
+        preview.MaxWidth = 420; preview.TextWrapping = TextWrapping.Wrap;
+        preview.TextAlignment = TextAlignment.Center; preview.MinHeight = 40;
+        preview.Margin = new Thickness(0, 2, 0, 2);
         // Flutter call site: 120 x 70, scaled to 80%; 50 units of travel.
         const double halfTravel = 25;
         var joy = Box(new Grid(), "#EF9A9A", 5, radius: 70);
@@ -268,8 +273,9 @@ public sealed partial class DesktopWorkspaceView
             else if (e.Key == Key.Escape && (active || processing)) { e.Handled = true; Cancel(); }
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         ToolTip.SetTip(knob, "按住并左右滑动选择标注，松手提交；键盘左右键开始，Enter 提交，Esc 取消");
-        preview.MaxWidth = 200; preview.TextWrapping = TextWrapping.Wrap;
-        return Stack(6, new Viewbox { Width = 96, Height = 56, Child = joy,
+        // 状态行必须全宽放在摇杆那一排的下面：塞进 hotzone 的中间列只有 ~140px，
+        // 14pt 的中文会被挤成四行还压到两侧按钮上（真机 361dp 实测）。
+        return (new Viewbox { Width = 96, Height = 56, Child = joy,
             HorizontalAlignment = HorizontalAlignment.Center }, preview);
     }
     /// <summary>

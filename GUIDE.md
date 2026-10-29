@@ -243,6 +243,16 @@ Flutter 原版用了两套东西，行为完全不同，迁移时不能合并成
    - 松手时无条件 `e.Pointer.Capture(null)`：会在 `Button` 自己被派发 `PointerReleased` **之前**摘掉捕获 → Button 立刻 `PointerCaptureLost` → `IsPressed=false` → `Click` 永不触发。表现是**整个 App 所有按钮都点不动**（真机 + headless 同时复现；此前所有 UI 用例都用 `Invoke()` 直接 `RaiseEvent(Button.ClickEvent)`，把命中和捕获整条链路绕过去了，所以测试全绿）。用例：`Ui_buttons_receive_real_pointer_clicks`。
    - 用 `e.GetPosition(_joyArea)` + `IsEffectivelyVisible` 判命中：切到计划页/时间轴后 `_joyArea` 还指向上一页那个**已脱离可视树**的摇杆，`IsEffectivelyVisible` 无父级时按 `true` 算、`GetPosition` 对不在树上的控件返回 `(0,0)` → 位置检查全过 → **任何一次点击都被当成按住摇杆**，每点一下就开始录一嗓子，真机表现为「界面卡死」。现在 `Render()` 开头把 `_joyArea/_joyPress/_joyMove/_joyRelease` 全部清空、只由记录页重新装填，命中判定统一走 `InsideJoy(e.GetPosition(this))`（内部要求 `joy.GetVisualAncestors().Contains(this)`）。用例：`Ui_voice_joystick_target_is_cleared_when_leaving_the_record_page`。
 
+#### 记录页底栏与语音状态行（手机 361dp 的版面约束）
+
+手机上记录页**内容本来就不止一屏**（数字卡 + 两个标注框 + 时间轴入口 ≈ 900dp），所以布局按「固定底栏 + 可滚动内容」分：
+
+- `BuildRecord()` 的 `Grid` 行是 `Auto(页头) / Auto(工程条) / *(滚动区) / Auto(语音底栏) / Auto(脚注)`；滚动区里只有拍摄计划入口、数字卡、`录音标注`、`镜头标注`、`场记时间轴` 按钮。
+- **底栏 = `voiceStatus` + `hotzone`**（撤回 / 摇杆 / 下一场），带 1px 上分隔线。理由：主控（按住说话、记一条、撤回）一旦被滚出屏幕，现场就没法操作；Flutter 原版也是把这一排固定在 `BottomNavigationBar` 之上。
+- **语音状态行 14pt、居中、`MinHeight = 40`（两行）**：它是小屏上语音反馈的唯一出口（`正在连接百炼…` → `正在聆听…` → 实时部分转写 → `已写入录音标注`）。11pt 在 361dp 上太小、正文下面原先那行 10pt 提示与它重复，已删掉（`DesktopWorkspaceView.cs` 旧 `按住语音摇杆 · 左滑…` 那行）。
+- `_compact` 下数字卡同时收窄：数字 38→31（超 3 字符 29→24）、卡片内边距 12→7、`card` 容器 18→12，否则滚动区只剩半张卡、连 `录音标注` 输入框都被底栏压掉一半。
+- 截图对照：`shots/voice-dock-narrow.png`（390×840 headless）、`shots/device-voice-dock.png`（RMX5060，1264×2780 @560dpi）。
+
 #### 语音采集停止（Android）
 
 `AndroidPcmCapture.Pump()` 的循环条件必须是 `while (!_stopRequested)`：真机实测 **`AudioRecord.Read` 在 `Stop()` 瞬间返回 0（不是负数）**，原先的 `if (read <= 0) continue;` 会让采集线程空转不退，`StopAsync()` 等 3 秒后抛 .NET 英文 `TimeoutException`，被 `Finish()` 的兜底 catch 原样弹成 toast（用户看到的就是那句莫名的 `timeout`）。现在 `read < 0` 视为致命（中文错误）、`read == 0` 睡 5ms 再试、`StopAsync` 超时则只 `TryComplete()` 收口（**不 Release**），并把 `TimeoutException` 映射成中文提示。`Dispose()` 必须「先 `Stop()` → 等采集线程退出（最多 2s）→ 才 `Release()` 原生对象」：采集线程还阻塞在原生 `Read()` 里时并发 `Release()` 是 SIGSEGV，进程无 Java 异常直接消失（logcat 只剩 `Death received`）；等待失败时宁可泄漏 `AudioRecord` 也不 Release。

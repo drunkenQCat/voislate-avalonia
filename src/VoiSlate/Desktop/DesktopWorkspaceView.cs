@@ -413,7 +413,7 @@ public sealed partial class DesktopWorkspaceView : UserControl
     }
     private Control BuildRecord()
     {
-        var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto") };
+        var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto") };
         grid.Children.Add(PageHeader("VOISLATE / ON SET", "当前记录", B("⚙", ShowSettings, "quiet", "open-settings")));
         var project = B($"▧  {_service.State.Project}   ·   完成 {DoneCount} / {ShotCount} 镜   ↗", () => Navigate("plan"), "quiet");
         project.HorizontalAlignment = HorizontalAlignment.Stretch; Grid.SetRow(project, 1); grid.Children.Add(project);
@@ -428,11 +428,11 @@ public sealed partial class DesktopWorkspaceView : UserControl
         for (int i = 0; i < 3; i++)
         {
             var index = i; var item = values[i];
-            var value = T(item.Item1.Length == 0 ? "—" : item.Item1, item.Item1.Length > 3 ? 29 : 38, "#203A40", true); value.HorizontalAlignment = HorizontalAlignment.Center;
+            var value = T(item.Item1.Length == 0 ? "—" : item.Item1, item.Item1.Length > 3 ? (_compact ? 24 : 29) : (_compact ? 31 : 38), "#203A40", true); value.HorizontalAlignment = HorizontalAlignment.Center;
             var unit = T(item.Item2, 12, "#89958B"); unit.HorizontalAlignment = HorizontalAlignment.Center;
             var button = B("", () => { if (index < 2) Navigate("plan"); else ShowRenum(); }, "quiet");
             button.HorizontalContentAlignment = HorizontalAlignment.Stretch; button.VerticalContentAlignment = VerticalAlignment.Stretch;
-            button.Content = Box(Stack(4, value, unit), "#FFFFFF", 12, "#D8D5C0", 10); button.Padding = new Thickness(0); button.HorizontalAlignment = HorizontalAlignment.Stretch;
+            button.Content = Box(Stack(_compact ? 2 : 4, value, unit), "#FFFFFF", _compact ? 7 : 12, "#D8D5C0", 10); button.Padding = new Thickness(0); button.HorizontalAlignment = HorizontalAlignment.Stretch;
             AutomationProperties.SetName(button, $"{item.Item2} {item.Item1}"); Grid.SetColumn(button, i); slate.Children.Add(button);
         }
         card.Children.Add(slate);
@@ -449,14 +449,15 @@ public sealed partial class DesktopWorkspaceView : UserControl
         AutomationProperties.SetName(sound,"声音评价"); sound.SelectionChanged += (_, _) => { if (sound.SelectedIndex >= 0) Run(() => _service.SetSoundAsync((TkStatus)sound.SelectedIndex)); };
         verdicts.Children.Add(picture); Grid.SetColumn(sound, 1); verdicts.Children.Add(sound); card.Children.Add(verdicts);
         if (d.Ended) card.Children.Add(B("✓ 本镜已保存并结束    下一镜 →", () => Run(async () => { try { await _service.NextShotAsync(); } catch (InvalidOperationException) { Navigate("plan"); Toast("已到计划末尾，可添加或选择镜头"); } }), "primary", "next-shot"));
-        panel.Children.Add(Box(card, "#FFFDF5", 18, "#E4E3D5", 18));
+        // 手机 361dp：卡片内边距与数字卡高度都要收，否则滚动区只剩半张卡，
+        // 连「录音标注」输入框都被底部固定栏压掉一半。
+        panel.Children.Add(Box(card, "#FFFDF5", _compact ? 12 : 18, "#E4E3D5", 18));
         _recNote = new TextBox { Text = d.RecordingNote, PlaceholderText = "◉  录音标注…", IsReadOnly = d.Ended };
         _shotNote = new TextBox { Text = d.ShotNote, PlaceholderText = "▧  镜头标注…", IsReadOnly = d.Ended };
         AutomationProperties.SetAutomationId(_recNote, "recording-note"); AutomationProperties.SetName(_recNote,"录音标注");
         AutomationProperties.SetAutomationId(_shotNote, "shot-note"); AutomationProperties.SetName(_shotNote,"镜头标注");
         _recNote.TextChanged += NotesChanged; _shotNote.TextChanged += NotesChanged;
         panel.Children.Add(_recNote);
-        panel.Children.Add(T("按住语音摇杆 · 左滑录音标注 / 右滑镜头标注 · 回中取消", 10, "#8A9691"));
         var undo = B("↶\n撤回", AskUndo, "quiet", "undo-take"); undo.IsEnabled = _service.CanUndo;
         var add = B(_service.State.PocketLock ? "＋\n长按记条" : "＋\n下一条", () =>
         {
@@ -473,16 +474,28 @@ public sealed partial class DesktopWorkspaceView : UserControl
         add.AddHandler(InputElement.KeyDownEvent, (_, e) => { if (_service.State.PocketLock && e.KeyModifiers == KeyModifiers.None && e.Key is Key.Space or Key.Enter) { e.Handled = true; if (!_holding) { _held = false; _holding = true; _hold.Start(); } } }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         add.AddHandler(InputElement.KeyUpEvent, (_, e) => { if (_service.State.PocketLock && e.Key is Key.Space or Key.Enter) { e.Handled = true; _holding = false; _hold.Stop(); } }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         var hotzone = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 12, Margin = new Thickness(0, 3) };
-        hotzone.Children.Add(undo); var voice = BuildVoice(); Grid.SetColumn(voice, 1); hotzone.Children.Add(voice); Grid.SetColumn(add, 2); hotzone.Children.Add(add);
+        hotzone.Children.Add(undo);
+        var (voice, voiceStatus) = BuildVoice();
+        Grid.SetColumn(voice, 1); hotzone.Children.Add(voice); Grid.SetColumn(add, 2); hotzone.Children.Add(add);
         if (_service.State.LeftHanded) { Grid.SetColumn(add, 0); Grid.SetColumn(undo, 2); }
-        panel.Children.Add(hotzone); panel.Children.Add(_shotNote);
+        panel.Children.Add(_shotNote);
         panel.Children.Add(B("⌄  场记时间轴", () => { _scopeScene = _scopeShot = null; Navigate("log"); }, "quiet", "open-timeline"));
         if (!_service.State.Linked) panel.Children.Add(T("补录模式 · 次号冻结，文件号继续前进", 11, "#9875A3"));
         var scroll = new ScrollViewer { Content = panel, HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center };
         _recordScroll = scroll;
         Grid.SetRow(scroll, 2); grid.Children.Add(scroll);
+        // 语音状态行 + 记条/撤回/摇杆那一排做成**固定底栏**：
+        // 手机 361dp 上记录页内容本来就超一屏，主控（按住说话、记一条、撤回）
+        // 一旦滚出屏幕就没法用了；固定在底部后滚动区只剩卡片和两个标注框。
+        var dockInner = Stack(4, voiceStatus, hotzone); dockInner.MaxWidth = 470; dockInner.Margin = PagePad(20, 6);
+        var dock = new Border
+        {
+            Child = dockInner, Background = Brush("#F3F6F3"),
+            BorderBrush = Brush("#E1E7E1"), BorderThickness = new Thickness(0, 1, 0, 0),
+        };
+        Grid.SetRow(dock, 3); grid.Children.Add(dock);
         var caption = T("本机自动保存  ·  百炼实时语音标注", 10, "#96A397"); caption.Margin = new Thickness(20, 10); caption.HorizontalAlignment = HorizontalAlignment.Center;
-        Grid.SetRow(caption, 3); grid.Children.Add(caption); return grid;
+        Grid.SetRow(caption, 4); grid.Children.Add(caption); return grid;
     }
     private async void NotesChanged(object? sender, TextChangedEventArgs e)
     {
